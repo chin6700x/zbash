@@ -132,9 +132,11 @@ typedef struct {
     int var_attr_count;
     bool posix;
     bool interactive;
+    bool norc;
     bool restricted;
     bool nounset;
     bool noclobber;
+    double last_cmd_duration_ms;
     int stdin_redir_depth;
     bool stdin_permanently_redirected;
     bool in_cmd_args;

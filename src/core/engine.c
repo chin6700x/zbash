@@ -5,6 +5,7 @@
  */
 
 #include "core_internal.h"
+#include "prompt.h"
 
 volatile int zbash_suppress_int = 0;
 volatile int zbash_pending_int = 0;
@@ -1718,117 +1719,10 @@ int zbash_run_file(zbash_state_t *state, const char *filepath) {
 #if defined(__APPLE__) && !defined(__EMSCRIPTEN__)
 #include <histedit.h>
 
-static char s_prompt_buf[1024];
-
 static char *zbash_prompt_callback(EditLine *el) {
     zbash_state_t *state = NULL;
     el_get(el, EL_CLIENTDATA, &state);
-    (void)state;
-
-    const char *ps1 = getenv("PS1");
-    if (!ps1 || !*ps1) {
-        const char *pwd = getenv("PWD");
-        const char *home = getenv("HOME");
-        char cwd_disp[256];
-        if (pwd) {
-            if (home && strncmp(pwd, home, strlen(home)) == 0) {
-                snprintf(cwd_disp, sizeof(cwd_disp), "~%s", pwd + strlen(home));
-            } else {
-                snprintf(cwd_disp, sizeof(cwd_disp), "%s", pwd);
-            }
-        } else {
-            snprintf(cwd_disp, sizeof(cwd_disp), ".");
-        }
-        snprintf(s_prompt_buf, sizeof(s_prompt_buf), "zbash:%s$ ", cwd_disp);
-        return s_prompt_buf;
-    }
-
-    char buf[1024];
-    size_t bi = 0;
-    const char *p = ps1;
-    while (*p && bi + 1 < sizeof(buf)) {
-        if (*p == '\\' && *(p + 1)) {
-            p++;
-            switch (*p) {
-                case 'u': {
-                    const char *user = getenv("USER");
-                    if (!user) user = "user";
-                    size_t ulen = strlen(user);
-                    if (bi + ulen < sizeof(buf)) {
-                        memcpy(buf + bi, user, ulen);
-                        bi += ulen;
-                    }
-                    break;
-                }
-                case 'h': {
-                    char host[128];
-                    if (gethostname(host, sizeof(host)) == 0) {
-                        char *dot = strchr(host, '.');
-                        if (dot) *dot = '\0';
-                        size_t hlen = strlen(host);
-                        if (bi + hlen < sizeof(buf)) {
-                            memcpy(buf + bi, host, hlen);
-                            bi += hlen;
-                        }
-                    }
-                    break;
-                }
-                case 'w': {
-                    const char *pwd = getenv("PWD");
-                    const char *home = getenv("HOME");
-                    if (pwd) {
-                        if (home && strncmp(pwd, home, strlen(home)) == 0) {
-                            buf[bi++] = '~';
-                            const char *rem = pwd + strlen(home);
-                            size_t rlen = strlen(rem);
-                            if (bi + rlen < sizeof(buf)) {
-                                memcpy(buf + bi, rem, rlen);
-                                bi += rlen;
-                            }
-                        } else {
-                            size_t plen = strlen(pwd);
-                            if (bi + plen < sizeof(buf)) {
-                                memcpy(buf + bi, pwd, plen);
-                                bi += plen;
-                            }
-                        }
-                    }
-                    break;
-                }
-                case 'W': {
-                    const char *pwd = getenv("PWD");
-                    if (pwd) {
-                        const char *slash = strrchr(pwd, '/');
-                        const char *base = slash ? (slash[1] ? slash + 1 : "/") : pwd;
-                        size_t blen = strlen(base);
-                        if (bi + blen < sizeof(buf)) {
-                            memcpy(buf + bi, base, blen);
-                            bi += blen;
-                        }
-                    }
-                    break;
-                }
-                case '$':
-                    buf[bi++] = (geteuid() == 0) ? '#' : '$';
-                    break;
-                case 'n':
-                    buf[bi++] = '\n';
-                    break;
-                case '\\':
-                    buf[bi++] = '\\';
-                    break;
-                default:
-                    buf[bi++] = *p;
-                    break;
-            }
-            p++;
-        } else {
-            buf[bi++] = *p++;
-        }
-    }
-    buf[bi] = '\0';
-    snprintf(s_prompt_buf, sizeof(s_prompt_buf), "%s", buf);
-    return s_prompt_buf;
+    return zbash_build_prompt(state, true);
 }
 
 int zbash_run_interactive(zbash_state_t *state) {
@@ -1837,6 +1731,8 @@ int zbash_run_interactive(zbash_state_t *state) {
     }
 
     state->interactive = true;
+    state->expand_aliases = true;
+    zbash_load_rc(state);
 
     EditLine *el = el_init("zbash", stdin, stdout, stderr);
     if (!el) {
@@ -1863,7 +1759,7 @@ int zbash_run_interactive(zbash_state_t *state) {
     }
 
     el_set(el, EL_CLIENTDATA, state);
-    el_set(el, EL_PROMPT, zbash_prompt_callback);
+    el_set(el, EL_PROMPT_ESC, zbash_prompt_callback, '\1');
     if (hist) {
         el_set(el, EL_HIST, history, hist);
     }
@@ -1901,8 +1797,20 @@ int zbash_run_interactive(zbash_state_t *state) {
             }
         }
 
+        struct timespec ts_start, ts_end;
+        clock_gettime(CLOCK_MONOTONIC, &ts_start);
+
         zbash_trigger_preexec(state, trimmed);
         zbash_run_line(state, trimmed);
+
+        clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        double elapsed_ms = (ts_end.tv_sec - ts_start.tv_sec) * 1000.0 +
+                            (ts_end.tv_nsec - ts_start.tv_nsec) / 1000000.0;
+        state->last_cmd_duration_ms = elapsed_ms;
+        char dur_str[32];
+        snprintf(dur_str, sizeof(dur_str), "%.2f", elapsed_ms);
+        setenv("ZBASH_CMD_DURATION", dur_str, 1);
+
         free(trimmed);
     }
 
@@ -1918,19 +1826,33 @@ int zbash_run_interactive(zbash_state_t *state) {
 int zbash_run_interactive(zbash_state_t *state) {
     if (isatty(STDIN_FILENO)) {
         state->interactive = true;
+        state->expand_aliases = true;
+        zbash_load_rc(state);
+
         char *line = NULL;
         size_t cap = 0;
         ssize_t nread;
         while (!state->should_exit) {
             zbash_trigger_hook(state, "precmd");
-            fputs("zbash$ ", stdout);
+            fputs(zbash_build_prompt(state, false), stdout);
             fflush(stdout);
             nread = getline(&line, &cap, stdin);
             if (nread == -1) break;
             if (nread > 0 && line[nread - 1] == '\n') line[nread - 1] = '\0';
             if (*line) {
+                struct timespec ts_start, ts_end;
+                clock_gettime(CLOCK_MONOTONIC, &ts_start);
+
                 zbash_trigger_preexec(state, line);
                 zbash_run_line(state, line);
+
+                clock_gettime(CLOCK_MONOTONIC, &ts_end);
+                double elapsed_ms = (ts_end.tv_sec - ts_start.tv_sec) * 1000.0 +
+                                    (ts_end.tv_nsec - ts_start.tv_nsec) / 1000000.0;
+                state->last_cmd_duration_ms = elapsed_ms;
+                char dur_str[32];
+                snprintf(dur_str, sizeof(dur_str), "%.2f", elapsed_ms);
+                setenv("ZBASH_CMD_DURATION", dur_str, 1);
             }
         }
         if (line) free(line);

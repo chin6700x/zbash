@@ -32,6 +32,12 @@ int main(int argc, char *argv[]) {
             break;
         }
 
+        if (strcmp(argv[opt_idx], "--norc") == 0 || strcmp(argv[opt_idx], "--noprofile") == 0) {
+            state.norc = true;
+            opt_idx++;
+            continue;
+        }
+
         if (argv[opt_idx][0] == '-' && argv[opt_idx][1] != '\0') {
             const char *opt = argv[opt_idx] + 1;
             bool stop_parsing = false;

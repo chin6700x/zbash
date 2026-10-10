@@ -22,7 +22,7 @@ endif
 BIN_DIR = bin
 SRC_DIR = src
 
-SRCS = src/main.c src/core/engine.c src/core/variables.c src/core/arith.c src/core/exec.c src/core/control.c \
+SRCS = src/main.c src/core/engine.c src/core/prompt.c src/core/variables.c src/core/arith.c src/core/exec.c src/core/control.c \
        src/parser/parser.c \
        src/parser/cmd_parser.c \
        src/parser/expand.c \
@@ -72,6 +72,7 @@ DEPS = $(SRCS:.c=.d)
 
 test: $(BIN_DIR)/zbash
 	@bash test/test_zbash.sh
+	@bash test/test_phase3_ux.sh
 
 arena: $(BIN_DIR)/zbash
 	@bash arena/arena_zbash.sh
