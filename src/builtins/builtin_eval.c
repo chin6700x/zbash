@@ -414,7 +414,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
             while (dir) {
                 char full[1024];
                 snprintf(full, sizeof(full), "%s/%s", dir, name);
-                if (access(full, X_OK) == 0) {
+                if (zbash_check_exec(full)) {
                     found = true;
                     recognized = true;
                     if (type_only) {
@@ -611,7 +611,7 @@ int builtin_command(zbash_state_t *state, int argc, char **argv) {
                 while (dir) {
                     char full[1024];
                     snprintf(full, sizeof(full), "%s/%s", dir, name);
-                    if (access(full, X_OK) == 0) {
+                    if (zbash_check_exec(full)) {
                         found = true;
                         if (type_v) {
                             printf("%s\n", full);

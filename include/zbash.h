@@ -11,6 +11,14 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+#if defined(__APPLE__)
+#define zbash_check_exec(path) (faccessat(AT_FDCWD, (path), X_OK, AT_EACCESS) == 0)
+#else
+#define zbash_check_exec(path) (access((path), X_OK) == 0)
+#endif
 
 #define ZBASH_MAX_ARGS 64
 #define ZBASH_MAX_PIPELINE 16

@@ -6,6 +6,27 @@
 
 #include "core_internal.h"
 
+volatile int zbash_suppress_int = 0;
+volatile int zbash_pending_int = 0;
+
+void zbash_trigger_hook(zbash_state_t *state, const char *hook_name) {
+    if (!state) return;
+    zbash_func_t *fn = zbash_find_func(state, hook_name);
+    if (fn) {
+        char *argv[] = { (char *)hook_name, NULL };
+        zbash_exec_func(state, fn, 1, argv);
+    }
+}
+
+void zbash_trigger_preexec(zbash_state_t *state, const char *cmdline) {
+    if (!state) return;
+    zbash_func_t *fn = zbash_find_func(state, "preexec");
+    if (fn) {
+        char *argv[] = { "preexec", (char *)cmdline, NULL };
+        zbash_exec_func(state, fn, 2, argv);
+    }
+}
+
 /* ========================================================================= */
 /* Shell Lifecycle & State Initialization                                    */
 /* ========================================================================= */
@@ -1694,19 +1715,223 @@ int zbash_run_file(zbash_state_t *state, const char *filepath) {
     return state->should_exit ? state->exit_code : rc;
 }
 
+#if defined(__APPLE__) && !defined(__EMSCRIPTEN__)
+#include <histedit.h>
+
+static char s_prompt_buf[1024];
+
+static char *zbash_prompt_callback(EditLine *el) {
+    zbash_state_t *state = NULL;
+    el_get(el, EL_CLIENTDATA, &state);
+    (void)state;
+
+    const char *ps1 = getenv("PS1");
+    if (!ps1 || !*ps1) {
+        const char *pwd = getenv("PWD");
+        const char *home = getenv("HOME");
+        char cwd_disp[256];
+        if (pwd) {
+            if (home && strncmp(pwd, home, strlen(home)) == 0) {
+                snprintf(cwd_disp, sizeof(cwd_disp), "~%s", pwd + strlen(home));
+            } else {
+                snprintf(cwd_disp, sizeof(cwd_disp), "%s", pwd);
+            }
+        } else {
+            snprintf(cwd_disp, sizeof(cwd_disp), ".");
+        }
+        snprintf(s_prompt_buf, sizeof(s_prompt_buf), "zbash:%s$ ", cwd_disp);
+        return s_prompt_buf;
+    }
+
+    char buf[1024];
+    size_t bi = 0;
+    const char *p = ps1;
+    while (*p && bi + 1 < sizeof(buf)) {
+        if (*p == '\\' && *(p + 1)) {
+            p++;
+            switch (*p) {
+                case 'u': {
+                    const char *user = getenv("USER");
+                    if (!user) user = "user";
+                    size_t ulen = strlen(user);
+                    if (bi + ulen < sizeof(buf)) {
+                        memcpy(buf + bi, user, ulen);
+                        bi += ulen;
+                    }
+                    break;
+                }
+                case 'h': {
+                    char host[128];
+                    if (gethostname(host, sizeof(host)) == 0) {
+                        char *dot = strchr(host, '.');
+                        if (dot) *dot = '\0';
+                        size_t hlen = strlen(host);
+                        if (bi + hlen < sizeof(buf)) {
+                            memcpy(buf + bi, host, hlen);
+                            bi += hlen;
+                        }
+                    }
+                    break;
+                }
+                case 'w': {
+                    const char *pwd = getenv("PWD");
+                    const char *home = getenv("HOME");
+                    if (pwd) {
+                        if (home && strncmp(pwd, home, strlen(home)) == 0) {
+                            buf[bi++] = '~';
+                            const char *rem = pwd + strlen(home);
+                            size_t rlen = strlen(rem);
+                            if (bi + rlen < sizeof(buf)) {
+                                memcpy(buf + bi, rem, rlen);
+                                bi += rlen;
+                            }
+                        } else {
+                            size_t plen = strlen(pwd);
+                            if (bi + plen < sizeof(buf)) {
+                                memcpy(buf + bi, pwd, plen);
+                                bi += plen;
+                            }
+                        }
+                    }
+                    break;
+                }
+                case 'W': {
+                    const char *pwd = getenv("PWD");
+                    if (pwd) {
+                        const char *slash = strrchr(pwd, '/');
+                        const char *base = slash ? (slash[1] ? slash + 1 : "/") : pwd;
+                        size_t blen = strlen(base);
+                        if (bi + blen < sizeof(buf)) {
+                            memcpy(buf + bi, base, blen);
+                            bi += blen;
+                        }
+                    }
+                    break;
+                }
+                case '$':
+                    buf[bi++] = (geteuid() == 0) ? '#' : '$';
+                    break;
+                case 'n':
+                    buf[bi++] = '\n';
+                    break;
+                case '\\':
+                    buf[bi++] = '\\';
+                    break;
+                default:
+                    buf[bi++] = *p;
+                    break;
+            }
+            p++;
+        } else {
+            buf[bi++] = *p++;
+        }
+    }
+    buf[bi] = '\0';
+    snprintf(s_prompt_buf, sizeof(s_prompt_buf), "%s", buf);
+    return s_prompt_buf;
+}
+
+int zbash_run_interactive(zbash_state_t *state) {
+    if (!isatty(STDIN_FILENO)) {
+        return zbash_run_stream(state, stdin);
+    }
+
+    state->interactive = true;
+
+    EditLine *el = el_init("zbash", stdin, stdout, stderr);
+    if (!el) {
+        return zbash_run_stream(state, stdin);
+    }
+
+    History *hist = history_init();
+    HistEvent ev;
+    if (hist) {
+        history(hist, &ev, H_SETSIZE, 2000);
+        history(hist, &ev, H_SETUNIQUE, 1);
+    }
+
+    const char *home = getenv("HOME");
+    char hist_path[1024];
+    if (home && *home) {
+        snprintf(hist_path, sizeof(hist_path), "%s/.zbash_history", home);
+    } else {
+        snprintf(hist_path, sizeof(hist_path), ".zbash_history");
+    }
+
+    if (hist) {
+        history(hist, &ev, H_LOAD, hist_path);
+    }
+
+    el_set(el, EL_CLIENTDATA, state);
+    el_set(el, EL_PROMPT, zbash_prompt_callback);
+    if (hist) {
+        el_set(el, EL_HIST, history, hist);
+    }
+    el_set(el, EL_EDITOR, "emacs");
+    el_set(el, EL_ADDFN, "sh-complete", "Filename and command completion", _el_fn_sh_complete);
+    el_set(el, EL_BIND, "^I", "sh-complete", NULL);
+    el_source(el, NULL);
+
+    int count = 0;
+    while (!state->should_exit) {
+        zbash_trigger_hook(state, "precmd");
+
+        const char *line = el_gets(el, &count);
+        if (!line || count <= 0) break;
+
+        char *trimmed = strdup(line);
+        if (!trimmed) continue;
+
+        size_t tlen = strlen(trimmed);
+        while (tlen > 0 && (trimmed[tlen - 1] == '\n' || trimmed[tlen - 1] == '\r')) {
+            trimmed[--tlen] = '\0';
+        }
+
+        if (tlen == 0) {
+            free(trimmed);
+            continue;
+        }
+
+        if (hist) {
+            history(hist, &ev, H_ENTER, trimmed);
+            FILE *hfp = fopen(hist_path, "a");
+            if (hfp) {
+                fprintf(hfp, "%s\n", trimmed);
+                fclose(hfp);
+            }
+        }
+
+        zbash_trigger_preexec(state, trimmed);
+        zbash_run_line(state, trimmed);
+        free(trimmed);
+    }
+
+    if (hist) {
+        history(hist, &ev, H_SAVE, hist_path);
+        history_end(hist);
+    }
+    el_end(el);
+
+    return state->should_exit ? state->exit_code : state->last_status;
+}
+#else
 int zbash_run_interactive(zbash_state_t *state) {
     if (isatty(STDIN_FILENO)) {
+        state->interactive = true;
         char *line = NULL;
         size_t cap = 0;
         ssize_t nread;
-        while (1) {
+        while (!state->should_exit) {
+            zbash_trigger_hook(state, "precmd");
             fputs("zbash$ ", stdout);
             fflush(stdout);
             nread = getline(&line, &cap, stdin);
             if (nread == -1) break;
             if (nread > 0 && line[nread - 1] == '\n') line[nread - 1] = '\0';
-            zbash_run_line(state, line);
-            if (state->should_exit) break;
+            if (*line) {
+                zbash_trigger_preexec(state, line);
+                zbash_run_line(state, line);
+            }
         }
         if (line) free(line);
         return state->should_exit ? state->exit_code : state->last_status;
@@ -1714,3 +1939,4 @@ int zbash_run_interactive(zbash_state_t *state) {
         return zbash_run_stream(state, stdin);
     }
 }
+#endif

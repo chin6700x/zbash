@@ -51,6 +51,7 @@ int main(int argc, char *argv[]) {
                     case 'x': state.xtrace = true; break;
                     case 'n': state.noexec = true; break;
                     case 'v': state.verbose = true; break;
+                    case 'i': state.interactive = true; break;
                     case 'r':
                         state.restricted = true;
                         zbash_set_var_attr(&state, "PATH", ZBASH_ATTR_READONLY);

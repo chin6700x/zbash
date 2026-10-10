@@ -684,8 +684,16 @@ int execute_single_cmd(zbash_state_t *state, zbash_cmd_t *cmd) {
             }
         }
     } else {
-        /* External command */
-        if (state && state->restricted && strchr(effective_argv[0], '/')) {
+        /* Auto-CD in interactive mode: typing directory path changes cwd */
+        struct stat st_cd;
+        if (state && state->interactive && effective_argc >= 1 &&
+            stat(effective_argv[0], &st_cd) == 0 && S_ISDIR(st_cd.st_mode)) {
+            char *cd_args[3];
+            cd_args[0] = "cd";
+            cd_args[1] = effective_argv[0];
+            cd_args[2] = NULL;
+            cmd_ret = builtin_cd(state, 2, cd_args);
+        } else if (state && state->restricted && strchr(effective_argv[0], '/')) {
             const char *src = get_script_name(state);
             int lineno = state->lineno > 0 ? state->lineno : 1;
             fprintf(stderr, "%s: line %d: %s: restricted: cannot specify `/' in command names\n", src, lineno, effective_argv[0]);

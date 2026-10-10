@@ -776,7 +776,7 @@ int builtin_hash(zbash_state_t *state, int argc, char **argv) {
         while (dir) {
             char full[1024];
             snprintf(full, sizeof(full), "%s/%s", dir, name);
-            if (access(full, X_OK) == 0) {
+            if (zbash_check_exec(full)) {
                 int pos = -1;
                 for (int h = 0; h < state->hash_count; h++) {
                     if (strcmp(state->hash_table[h].name, name) == 0) {

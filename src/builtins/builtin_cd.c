@@ -97,6 +97,20 @@ int builtin_cd(zbash_state_t *state, int argc, char **argv) {
             return 1;
         }
         print_target = true;
+    } else if (argv[arg_idx][0] == '-' && isdigit((unsigned char)argv[arg_idx][1])) {
+        int idx = atoi(argv[arg_idx] + 1);
+        zbash_array_t *arr = zbash_find_array(state, "DIRSTACK");
+        if (arr && idx >= 0 && idx < arr->count && arr->elements[idx]) {
+            target = arr->elements[idx];
+            print_target = true;
+        } else {
+            if (lineno > 0) {
+                fprintf(stderr, "%s: line %d: cd: bad directory stack index: %s\n", src, lineno, argv[arg_idx]);
+            } else {
+                fprintf(stderr, "%s: cd: bad directory stack index: %s\n", src, argv[arg_idx]);
+            }
+            return 1;
+        }
     } else {
         target = argv[arg_idx];
     }
@@ -158,6 +172,10 @@ int builtin_cd(zbash_state_t *state, int argc, char **argv) {
     } else {
         setenv("PWD", new_logical, 1);
         if (state) zbash_set_array_elem(state, "DIRSTACK", 0, new_logical);
+    }
+
+    if (state) {
+        zbash_trigger_hook(state, "chpwd");
     }
 
     return 0;

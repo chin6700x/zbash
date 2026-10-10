@@ -63,17 +63,33 @@ int zbash_apply_redirections_saved(zbash_state_t *state, zbash_cmd_t *cmd, int s
 void zbash_restore_redirections(zbash_state_t *state, int saved_fds[][2], int saved_count);
 int execute_single_cmd(zbash_state_t *state, zbash_cmd_t *cmd);
 int execute_pipeline(zbash_state_t *state, zbash_pipeline_t *pipeline);
+int builtin_cd(zbash_state_t *state, int argc, char **argv);
 
 /* Variables & Arrays (variables.c) */
 bool check_array_def(zbash_state_t *state, const char *p);
 
 /* Control structures & Functions (control.c) */
 bool check_func_def(zbash_state_t *state, const char *p);
+int zbash_exec_func(zbash_state_t *state, zbash_func_t *fn, int argc, char **argv);
 int exec_if(zbash_state_t *state, const char *cmd);
 int exec_for_c(zbash_state_t *state, const char *cmd);
 int exec_for_in(zbash_state_t *state, const char *cmd);
 int exec_while(zbash_state_t *state, const char *cmd);
 int exec_until(zbash_state_t *state, const char *cmd);
 int exec_case(zbash_state_t *state, const char *cmd);
+
+/* Lifecycle Hooks & Signal Protection */
+extern volatile int zbash_suppress_int;
+extern volatile int zbash_pending_int;
+#define ZBASH_INTOFF (zbash_suppress_int++)
+#define ZBASH_INTON do { \
+    if (--zbash_suppress_int == 0 && zbash_pending_int) { \
+        zbash_pending_int = 0; \
+        raise(SIGINT); \
+    } \
+} while (0)
+
+void zbash_trigger_hook(zbash_state_t *state, const char *hook_name);
+void zbash_trigger_preexec(zbash_state_t *state, const char *cmdline);
 
 #endif /* ZBASH_CORE_INTERNAL_H */

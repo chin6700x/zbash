@@ -13,7 +13,7 @@ CFLAGS = -O3 -Wall -Wextra -pthread -fomit-frame-pointer -flto -Iinclude
 ASFLAGS = -O3 -Wall
 
 ifeq ($(UNAME_S),Darwin)
-    LDFLAGS = -Wl,-dead_strip -Wl,-fixup_chains
+    LDFLAGS = -Wl,-dead_strip -Wl,-fixup_chains -ledit
 else
     CFLAGS += -D_GNU_SOURCE
     LDFLAGS = -Wl,--gc-sections

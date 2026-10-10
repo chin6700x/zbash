@@ -70,5 +70,6 @@ void zbash_print_func_def(const char *name, const char *raw_body);
 zbash_func_t *zbash_find_func(zbash_state_t *state, const char *name);
 void print_set_o_table(zbash_state_t *state, bool reusable);
 bool set_set_o_option_by_name(zbash_state_t *state, const char *name, bool turn_on);
+void zbash_trigger_hook(zbash_state_t *state, const char *hook_name);
 
 #endif /* ZBASH_BUILTINS_INTERNAL_H */
