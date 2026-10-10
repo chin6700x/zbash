@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>zbash Web-OS | In-Browser WebAssembly Shell &amp; Cloud Gateway</title>
+    <meta name="description" content="zbash v2.2.0 WebAssembly Engine - High-Performance POSIX Shell & Cloud VM Gateway running natively in the browser.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+<body>
+    <!-- Header Navbar -->
+    <header>
+        <div class="logo-area">
+            <div class="logo-icon">⚡</div>
+            <div class="logo-text">
+                <h1>zbash.wasm</h1>
+                <span>v2.2.0 WebAssembly POSIX Shell</span>
+            </div>
+        </div>
+        <div class="status-badges">
+            <div id="wasmBadge" class="badge badge-wasm">
+                <span class="badge-dot"></span> Wasm Core: Initializing...
+            </div>
+            <div id="cloudBadge" class="badge badge-cloud">
+                <span class="badge-dot"></span> Cloud VM: oxdb-production
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main>
+        <!-- Info Performance Cards -->
+        <div class="info-bar">
+            <div class="info-card">
+                <h4>Runtime Architecture</h4>
+                <div class="val">Wasm MVP + Emscripten</div>
+                <div class="sub">Compiled from Pure POSIX C / DAG</div>
+            </div>
+            <div class="info-card">
+                <h4>Execution Latency</h4>
+                <div id="latencyVal" class="val">&lt; 0.1 ms</div>
+                <div class="sub">Zero Network Hops (Local Browser Core)</div>
+            </div>
+            <div class="info-card">
+                <h4>Memory Footprint</h4>
+                <div id="ramVal" class="val">~1.4 MB</div>
+                <div class="sub">Linear Memory / In-Memory Stream Buffer</div>
+            </div>
+            <div class="info-card">
+                <h4>Hybrid Cloud Target</h4>
+                <div class="val">oxdb-production</div>
+                <div class="sub">GCP us-central1-a (Dual-Engine Mode)</div>
+            </div>
+        </div>
+
+        <!-- Terminal Window -->
+        <div class="terminal-window">
+            <div class="terminal-titlebar">
+                <div class="window-dots">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <div class="terminal-tabs">
+                    <button id="tabWasm" class="tab-btn active">⚡ Local Wasm Engine</button>
+                    <button id="tabCloud" class="tab-btn">☁️ Google Cloud VM (oxdb)</button>
+                </div>
+            </div>
+
+            <div id="terminalBody" class="terminal-body">
+                <div class="banner">
+                    ⚡ ZBASH V2.2.0 (WebAssembly Darwin/POSIX Shell Engine)
+                </div>
+                <div class="banner-desc">
+                    Dual-Engine Hybrid Web OS: Pure in-browser client shell with instant cloud orchestration.<br>
+                    Licensed under Apache License 2.0 &copy; 2026 Wirot Chookeaw (chin6700x).
+                </div>
+
+                <div id="output" class="output-area"></div>
+
+                <div class="input-row">
+                    <span class="prompt">zephyr@wasm:<span id="promptPath" class="prompt-path">~</span>$&nbsp;</span>
+                    <input id="cmdInput" class="cmd-input" type="text" autofocus autocomplete="off" spellcheck="false" placeholder="Type a command or click a chip below..." />
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Action Chips -->
+        <div class="quick-chips">
+            <span class="chip-label">Quick Run:</span>
+            <button class="chip" data-cmd="echo 'Hello from WebAssembly Shell!'">echo "Hello..."</button>
+            <button class="chip" data-cmd="(( C = 42 * 1024 )); echo &quot;Result: $C&quot;">Compound Math</button>
+            <button class="chip" data-cmd="for i in 1 2 3 4 5; do echo &quot;Step $i: Zephyr Wasm Active&quot;; done">for loop</button>
+            <button class="chip" data-cmd="NAME='Zephyr Web OS'; echo &quot;Environment: $NAME&quot;">Variables</button>
+            <button class="chip" data-cmd="say_hello() { echo &quot;Greetings $1!&quot;; }; say_hello &quot;Wirot&quot;">Functions</button>
+            <button class="chip" data-cmd="@cloud uname -a; uptime">@cloud status</button>
+            <button class="chip" data-cmd="help">help</button>
+            <button class="chip" data-cmd="clear">clear</button>
+        </div>
+
+        <!-- Cloud VM Panel (Hidden by default, toggled by Cloud Tab) -->
+        <div id="cloudPanel" class="cloud-panel">
+            <h3>☁️ Google Cloud VM Gateway: oxdb-production</h3>
+            <p style="font-size: 0.85rem; color: #94a3b8;">
+                Target Instance: <strong>oxdb-production</strong> (Zone: <code>us-central1-a</code>, Project ID: <code>gen-lang-client-0327258259</code>, Project # <code>660657792212</code>).
+            </p>
+
+            <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; flex-wrap: wrap;">
+                <label style="font-size: 0.8rem; color: #94a3b8;">Bridge Endpoint URL:</label>
+                <input id="cloudEndpointInput" type="text" value="http://localhost:8765" placeholder="http://localhost:8765 or http://<EXTERNAL_IP>:8765" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.4rem 0.75rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem; flex: 1; min-width: 260px;" />
+                <button id="btnTestCloud" class="tab-btn active" style="padding: 0.4rem 0.9rem;">⚡ Test Connection</button>
+            </div>
+            <div id="cloudStatusMsg" style="font-size: 0.82rem; font-family: var(--font-mono); margin-top: 0.25rem;"></div>
+
+            <p style="font-size: 0.85rem; color: #cbd5e1; margin-top: 0.5rem;">
+                Commands prefixed with <code>@cloud &lt;command&gt;</code> or executed in Cloud Mode run directly on your Google Cloud VM.
+            </p>
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-top: 0.25rem;">
+                <a class="cloud-link" href="https://ssh.cloud.google.com/v2/ssh/projects/gen-lang-client-0327258259/zones/us-central1-a/instances/oxdb-production?authuser=0&hl=en_US&projectNumber=660657792212&useAdminProxy=true" target="_blank" rel="noopener noreferrer">
+                    🔗 Open Google Cloud Console SSH for oxdb-production &rarr;
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        ZEPHYR ECOSYSTEM &bull; Bare-Metal Silicon Velocity &bull; 100% POSIX Parity &bull; Apache License 2.0 &copy; 2026 Wirot Chookeaw (chin6700x)
+    </footer>
+
+    <!-- Load Emscripten Wasm & Terminal Controller -->
+    <script src="zbash.js"></script>
+    <script src="terminal.js"></script>
+</body>
+</html>

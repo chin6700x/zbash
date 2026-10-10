@@ -1,0 +1,4 @@
+darwin:arm64:clang
+darwin:x86_64:clang
+linux:arm64:gcc
+linux:x86_64:gcc

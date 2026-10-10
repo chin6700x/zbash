@@ -1,0 +1,11 @@
+event: ping
+data: {"ts":1760000000}
+
+event: message
+data: {"user":"chinchin","text":"System ready"}
+
+event: user_join
+data: {"user":"alice","channel":"#general"}
+
+event: error
+data: {"code":429,"msg":"Too Many Requests"}

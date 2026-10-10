@@ -1,0 +1,5 @@
+{"id":1,"type":"metric","cpu":45.2,"mem":62.1,"ts":1760000001}
+{"id":2,"type":"metric","cpu":55.8,"mem":63.0,"ts":1760000002}
+{"id":3,"type":"alert","severity":"HIGH","msg":"Memory spike detected","ts":1760000003}
+{"id":4,"type":"metric","cpu":91.4,"mem":88.7,"ts":1760000004}
+{"id":5,"type":"metric","cpu":42.0,"mem":59.3,"ts":1760000005}

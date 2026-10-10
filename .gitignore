@@ -1,0 +1,63 @@
+# ==============================================================================
+# ⚡ ZEPHYR ECOSYSTEM: ZBASH .gitignore
+# ==============================================================================
+# Author: Wirot Chookeaw (chin6700x)
+# License: Apache License 2.0
+# ==============================================================================
+
+# Compiled Binaries & Object Files
+bin/
+*.o
+*.d
+*.a
+*.so
+*.dylib
+*.dSYM/
+zbash_err.txt
+_gnu_test_suite.txt
+zbash_out.txt
+zbash_overview.txt
+# Build Artefacts
+build/
+dist/
+target/
+plan/
+
+# Test Helpers & Test Artefacts
+test/support/recho
+test/support/zecho
+test/sandbox*
+test/**/*.out
+test/**/*.err
+test/**/*.tmp
+test/**/bash_out.txt
+test/**/bash_err.txt
+test/**/zbash_out.txt
+test/**/zbash_err.txt
+
+# WebAssembly & Frontend Build Outputs
+wasm/build/
+wasm/**/*.wasm
+wasm/**/*.map
+
+# Operating System Files (macOS & Unix)
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Editor & IDE Configs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+compile_commands.json
+compile_flags.txt
+.clangd/
+
+# Logs & Temporary Files
+*.log
+*.tmp
+*.bak

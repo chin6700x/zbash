@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Date: Fri, 09 Oct 2026 09:00:00 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 104
+Connection: keep-alive
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 842
+X-RateLimit-Reset: 1760000000
+Retry-After: 0
+ETag: W/"5d-x89jkl2"
+
+{"status":"success","data":{"id":"usr_991","name":"Alice Dev","role":"admin","credits":2500},"code":200}
