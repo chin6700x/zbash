@@ -22,7 +22,7 @@ build/
 dist/
 target/
 plan/
-
+docs/
 # Test Helpers & Test Artefacts
 test/support/recho
 test/support/zecho
