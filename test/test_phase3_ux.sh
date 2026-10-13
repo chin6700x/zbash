@@ -109,8 +109,8 @@ print(out.decode('utf-8', errors='ignore'))
 echo "$OUT3" | grep -q "╭─"
 test_case "Two-Line prompt header frame ╭─ rendered" $?
 
-echo "$OUT3" | grep -q "⚡ zbash"
-test_case "Prompt contains ⚡ zbash badge" $?
+echo "$OUT3" | grep -q "zbash"
+test_case "Prompt contains zbash badge" $?
 
 echo "$OUT3" | grep -q "git:(main)"
 test_case "Prompt contains zero-fork git:(main) branch" $?

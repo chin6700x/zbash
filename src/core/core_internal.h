@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <time.h>
 #include <unistd.h>
 
 /* Lexer / Parser shared parser interface */

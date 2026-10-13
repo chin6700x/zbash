@@ -249,11 +249,11 @@ bool is_statement_incomplete(const char *buf) {
             if (c == '{') {
                 bool at_word_start = (i == 0 || isspace((unsigned char)buf[i - 1]) || buf[i - 1] == ';');
                 bool is_alone = (i + 1 == len || isspace((unsigned char)buf[i + 1]) || buf[i + 1] == ';' || buf[i + 1] == '\n');
-                if (loop_needs_body > 0) {
+                if (loop_needs_body > 0 && last_non_space == ')' && at_word_start && is_alone) {
                     loop_needs_body--;
                     brace_d++;
                     cmd_start = true;
-                } else if ((last_non_space == ')' || func_needs_body > 0) && at_word_start) {
+                } else if ((last_non_space == ')' || func_needs_body > 0) && at_word_start && is_alone) {
                     if (func_needs_body > 0) func_needs_body = 0;
                     brace_d++;
                     cmd_start = true;
@@ -288,10 +288,14 @@ bool is_statement_incomplete(const char *buf) {
                         if (loop_needs_body > 0) loop_needs_body--;
                         do_d++;
                         cmd_start = true;
+                        i += 1;
+                        continue;
                     }
                     else if (is_word_match(buf + i, "done", 4)) { if (do_d > 0) do_d--; }
                     else if (is_word_match(buf + i, "then", 4) || is_word_match(buf + i, "else", 4) || is_word_match(buf + i, "elif", 4)) {
                         cmd_start = true;
+                        i += 3;
+                        continue;
                     }
                     else if (cmd_start && is_word_match(buf + i, "case", 4)) case_d++;
                     else if (is_word_match(buf + i, "esac", 4)) { if (case_d > 0) case_d--; }
@@ -640,8 +644,15 @@ static int zbash_run_line_internal(zbash_state_t *state, const char *line) {
                     else if (is_word_match(line + i, "done", 4)) { if (loop_d > 0) loop_d--; }
                     else if (cmd_start && is_word_match(line + i, "case", 4)) case_d++;
                     else if (is_word_match(line + i, "esac", 4)) { if (case_d > 0) case_d--; }
-                    else if (is_word_match(line + i, "do", 2) || is_word_match(line + i, "then", 4) || is_word_match(line + i, "else", 4) || is_word_match(line + i, "elif", 4)) {
+                    else if (is_word_match(line + i, "do", 2)) {
                         cmd_start = true;
+                        i += 1;
+                        continue;
+                    }
+                    else if (is_word_match(line + i, "then", 4) || is_word_match(line + i, "else", 4) || is_word_match(line + i, "elif", 4)) {
+                        cmd_start = true;
+                        i += 3;
+                        continue;
                     }
                 }
                 bool is_sep = (c == ';' || (c == '\n' && is_newline_separator(line, i)));
@@ -701,8 +712,15 @@ static int zbash_run_line_internal(zbash_state_t *state, const char *line) {
                         else if (is_word_match(line_copy + i, "done", 4)) { if (loop_d > 0) loop_d--; }
                         else if (cmd_start && is_word_match(line_copy + i, "case", 4)) case_d++;
                         else if (is_word_match(line_copy + i, "esac", 4)) { if (case_d > 0) case_d--; }
-                        else if (is_word_match(line_copy + i, "do", 2) || is_word_match(line_copy + i, "then", 4) || is_word_match(line_copy + i, "else", 4) || is_word_match(line_copy + i, "elif", 4)) {
+                        else if (is_word_match(line_copy + i, "do", 2)) {
                             cmd_start = true;
+                            i += 1;
+                            continue;
+                        }
+                        else if (is_word_match(line_copy + i, "then", 4) || is_word_match(line_copy + i, "else", 4) || is_word_match(line_copy + i, "elif", 4)) {
+                            cmd_start = true;
+                            i += 3;
+                            continue;
                         }
                     }
                 }

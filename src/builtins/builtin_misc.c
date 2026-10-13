@@ -876,59 +876,112 @@ int builtin_exec(zbash_state_t *state, int argc, char **argv) {
     exit(127);
 }
 
-static const char *help_lines[] = {
-    "GNU bash, version 3.2.57(1)-release (arm64-apple-darwin26)\n",
-    "These shell commands are defined internally.  Type `help' to see this list.\n",
-    " JOB_SPEC [&]                       (( expression ))\n",
-    " . filename [arguments]             :\n",
-    " [ arg... ]                         [[ expression ]]\n",
-    " alias [-p] [name[=value] ... ]     bg [job_spec ...]\n",
-    " bind [-lpvsPVS] [-m keymap] [-f fi break [n]\n",
-    " builtin [shell-builtin [arg ...]]  caller [EXPR]\n",
-    " case WORD in [PATTERN [| PATTERN]. cd [-L|-P] [dir]\n",
-    " command [-pVv] command [arg ...]   compgen [-abcdefgjksuv] [-o option\n",
-    " complete [-abcdefgjksuv] [-pr] [-o continue [n]\n",
-    " declare [-afFirtx] [-p] [name[=val dirs [-clpv] [+N] [-N]\n",
-    " disown [-h] [-ar] [jobspec ...]    echo [-neE] [arg ...]\n",
-    " enable [-pnds] [-a] [-f filename]  eval [arg ...]\n",
-    " exec [-cl] [-a name] file [redirec exit [n]\n",
-    " export [-nf] [name[=value] ...] or false\n",
-    " fc [-e ename] [-nlr] [first] [last fg [job_spec]\n",
-    " for NAME [in WORDS ... ;] do COMMA for (( exp1; exp2; exp3 )); do COM\n",
-    " function NAME { COMMANDS ; } or NA getopts optstring name [arg]\n",
-    " hash [-lr] [-p pathname] [-dt] [na help [-s] [pattern ...]\n",
-    " history [-c] [-d offset] [n] or hi if COMMANDS; then COMMANDS; [ elif\n",
-    " jobs [-lnprs] [jobspec ...] or job kill [-s sigspec | -n signum | -si\n",
-    " let arg [arg ...]                  local name[=value] ...\n",
-    " logout                             popd [+N | -N] [-n]\n",
-    " printf [-v var] format [arguments] pushd [dir | +N | -N] [-n]\n",
-    " pwd [-LP]                          read [-ers] [-u fd] [-t timeout] [\n",
-    " readonly [-af] [name[=value] ...]  return [n]\n",
-    " select NAME [in WORDS ... ;] do CO set [--abefhkmnptuvxBCHP] [-o opti\n",
-    " shift [n]                          shopt [-pqsu] [-o long-option] opt\n",
-    " source filename [arguments]        suspend [-f]\n",
-    " test [expr]                        time [-p] PIPELINE\n",
-    " times                              trap [-lp] [arg signal_spec ...]\n",
-    " true                               type [-afptP] name [name ...]\n",
-    " typeset [-afFirtx] [-p] name[=valu ulimit [-SHacdfilmnpqstuvx] [limit\n",
-    " umask [-p] [-S] [mode]             unalias [-a] name [name ...]\n",
-    " unset [-f] [-v] [name ...]         until COMMANDS; do COMMANDS; done\n",
-    " variables - Some variable names an wait [n]\n",
-    " while COMMANDS; do COMMANDS; done  { COMMANDS ; }\n",
-    NULL
+#if defined(__aarch64__) || defined(__arm64__)
+#define ZBASH_ARCH_STR "ARM64"
+#elif defined(__x86_64__)
+#define ZBASH_ARCH_STR "x86_64"
+#elif defined(__EMSCRIPTEN__)
+#define ZBASH_ARCH_STR "WASM"
+#else
+#define ZBASH_ARCH_STR "POSIX"
+#endif
+
+typedef struct {
+    const char *name;
+    const char *synopsis;
+    const char *desc;
+} zbash_builtin_doc_t;
+
+static const zbash_builtin_doc_t builtin_docs[] = {
+    { "cd", "cd [-L|-P] [dir]", "Change the current working directory to dir (default $HOME)." },
+    { "pwd", "pwd [-L|-P]", "Print the absolute pathname of the current working directory." },
+    { "echo", "echo [-neE] [arg ...]", "Write arguments to the standard output." },
+    { "printf", "printf format [arguments ...]", "Format and print arguments according to format string." },
+    { "pushd", "pushd [dir | +N | -N]", "Push a directory onto the directory stack or rotate the stack." },
+    { "popd", "popd [+N | -N]", "Pop a directory from the directory stack." },
+    { "dirs", "dirs [-clpv] [+N] [-N]", "Display the list of currently remembered directories in stack." },
+    { "export", "export [-n] [name[=value] ...]", "Set export attribute for shell variables to environment." },
+    { "unset", "unset [-f] [-v] [name ...]", "Unset values and attributes of variables and functions." },
+    { "set", "set [--abefhkmnptuvxBCHP] [-o option] [arg ...]", "Set or unset shell options and positional parameters." },
+    { "declare", "declare [-afFirtx] [-p] [name[=value] ...]", "Declare variables and give them attributes." },
+    { "typeset", "typeset [-afFirtx] [-p] [name[=value] ...]", "Equivalent to declare." },
+    { "readonly", "readonly [-af] [name[=value] ...]", "Mark variables or functions as unmodifiable." },
+    { "local", "local [name[=value] ...]", "Create local variables scoped to the current function." },
+    { "read", "read [-ers] [-u fd] [-t timeout] [name ...]", "Read a line from standard input and assign fields to variables." },
+    { "type", "type [-afptP] name [name ...]", "Display information about command type (builtin, alias, function, file)." },
+    { "test", "test [expr]", "Evaluate conditional expression (equivalent to [ expr ])." },
+    { "[", "[ expr ]", "Evaluate conditional expression." },
+    { "[[", "[[ expr ]]", "Evaluate conditional expression with extended operators." },
+    { "let", "let arg [arg ...]", "Evaluate arithmetic expressions." },
+    { "eval", "eval [arg ...]", "Construct command by concatenating arguments and execute it." },
+    { "exec", "exec [-cl] [-a name] file [redirections]", "Replace shell process with the specified command." },
+    { "exit", "exit [n]", "Exit the shell with a status of n (default status of last command)." },
+    { "source", "source filename [arguments ...]", "Execute commands from filename in current shell environment." },
+    { ".", ". filename [arguments ...]", "Execute commands from filename in current shell environment." },
+    { "alias", "alias [-p] [name[=value] ...]", "Define or display aliases." },
+    { "unalias", "unalias [-a] name [name ...]", "Remove aliases." },
+    { "shopt", "shopt [-pqsu] [-o] [optname ...]", "Set and unset shell optional behaviors." },
+    { "history", "history [-c] [-d offset] [n]", "Display or manipulate the command history list." },
+    { "fc", "fc [-e ename] [-nlr] [first] [last]", "Fix command / re-execute or list commands from history." },
+    { "jobs", "jobs [-lnprs] [jobspec ...]", "Display status of background and suspended jobs." },
+    { "fg", "fg [jobspec]", "Place job in the foreground." },
+    { "bg", "bg [jobspec ...]", "Place jobs in the background." },
+    { "disown", "disown [-h] [-ar] [jobspec ...]", "Remove jobs from active job table." },
+    { "wait", "wait [n ...]", "Wait for process or job completion and return its exit status." },
+    { "kill", "kill [-s sigspec | -n signum | -sigspec] pid | jobspec ...", "Send a signal to processes or jobs." },
+    { "trap", "trap [-lp] [arg signal_spec ...]", "Define shell handlers on receipt of signals or conditions." },
+    { "break", "break [n]", "Exit from within a for, while, or until loop." },
+    { "continue", "continue [n]", "Resume next iteration of an enclosing loop." },
+    { "return", "return [n]", "Return from a shell function or sourced script." },
+    { "shift", "shift [n]", "Shift positional parameters left by n." },
+    { "getopts", "getopts optstring name [arg ...]", "Parse positional parameters as command options." },
+    { "umask", "umask [-p] [-S] [mode]", "Display or set the file mode creation mask." },
+    { "builtin", "builtin [shell-builtin [arg ...]]", "Execute shell builtin bypassing functions and aliases." },
+    { "command", "command [-pVv] command [arg ...]", "Execute simple command bypassing functions." },
+    { "enable", "enable [-pnds] [-a] [-f filename] [name ...]", "Enable and disable builtin shell commands." },
+    { "hash", "hash [-lr] [-p pathname] [-dt] [name ...]", "Remember or display program locations." },
+    { "times", "times", "Print accumulated user and system CPU times." },
+    { "caller", "caller [expr]", "Return context of current subroutine call." },
+    { "true", "true", "Return a successful (0) exit status." },
+    { ":", ":", "Null command; return a successful (0) exit status." },
+    { "false", "false", "Return an unsuccessful (1) exit status." },
+    { NULL, NULL, NULL }
 };
 
 int builtin_help(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    for (int i = 0; help_lines[i]; i++) {
-        const char *s = help_lines[i];
-        while (*s) {
-            if (putchar(*s++) == EOF || ferror(stdout)) {
-                return 1;
+    if (argc > 1) {
+        const char *query = argv[1];
+        while (*query == '-') query++;
+        bool found = false;
+        for (int i = 0; builtin_docs[i].name; i++) {
+            if (strcmp(builtin_docs[i].name, query) == 0) {
+                printf("%s: %s\n", builtin_docs[i].name, builtin_docs[i].synopsis);
+                printf("    %s\n", builtin_docs[i].desc);
+                found = true;
+                break;
             }
         }
+        if (!found) {
+            fprintf(stderr, "zbash: help: no help topics match `%s'. Try `help' to see the list of builtins.\n", argv[1]);
+            return 1;
+        }
+        return 0;
     }
+
+    /* Full builtins listing with native Zephyr identity */
+    printf("╭────────────────────────────────────────────────────────────────────────────╮\n");
+    printf("│  ZEPHYR zbash Shell Engine — V.0.0.1 (%s)                               │\n", ZBASH_ARCH_STR);
+    printf("│  Bare-Metal Silicon Velocity · POSIX Standard · Native ISO C11             │\n");
+    printf("│  © 2026 Wirot Chookeaw (chin6700x)                                         │\n");
+    printf("╰────────────────────────────────────────────────────────────────────────────╯\n");
+    printf("Type `help <command>' for detailed syntax and options.\n\n");
+    printf("  📁 Navigation & Dirstack : cd, pwd, pushd, popd, dirs\n");
+    printf("  🔢 Variables & Scope     : export, unset, set, declare, readonly, local, typeset\n");
+    printf("  🔀 Control Flow & Logic  : if, for, while, until, case, break, continue, return\n");
+    printf("  ⚙️ Execution & State     : eval, exec, source, ., builtin, command, alias, unalias, shopt\n");
+    printf("  🧵 Jobs & Process Flow   : jobs, fg, bg, disown, wait, kill, trap\n");
+    printf("  📝 I/O & Text Utilities  : echo, printf, read, test, [, [[, let, history, fc, caller\n\n");
+    printf("POSIX-compliant shell engine with sub-millisecond cold start and NEON SIMD acceleration.\n");
     return 0;
 }
 

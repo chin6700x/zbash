@@ -6,6 +6,13 @@
 
 #include "core_internal.h"
 
+#if defined(__EMSCRIPTEN__)
+#define fpurge(fp) ((void)(fp))
+#elif defined(__linux__)
+#include <stdio_ext.h>
+#define fpurge(fp) __fpurge(fp)
+#endif
+
 static const char *get_script_name(zbash_state_t *state) {
     if (state && state->source_depth > 0 && state->source_stack[state->source_depth - 1]) {
         return state->source_stack[state->source_depth - 1];

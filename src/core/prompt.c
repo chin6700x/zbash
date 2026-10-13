@@ -338,11 +338,11 @@ char *zbash_build_prompt(zbash_state_t *state, bool is_libedit) {
     if (is_dumb) {
         if (has_git) {
             snprintf(s_prompt_buf, sizeof(s_prompt_buf),
-                     "+- [zbash] %s on git:%s%s\n+-> ",
+                     "+- zbash %s on git:%s%s\n+-> ",
                      short_path, branch, is_dirty ? "*" : "");
         } else {
             snprintf(s_prompt_buf, sizeof(s_prompt_buf),
-                     "+- [zbash] %s\n+-> ",
+                     "+- zbash %s\n+-> ",
                      short_path);
         }
         return s_prompt_buf;
@@ -354,26 +354,26 @@ char *zbash_build_prompt(zbash_state_t *state, bool is_libedit) {
     const char *esc_s = is_libedit ? "\1" : "";
     const char *esc_e = is_libedit ? "\1" : "";
 
-    char c_reset[32], c_gray[32], c_yellow[32], c_cyan[32], c_dim[32], c_blue[32], c_magenta[32], c_green[32], c_red[32];
+    char c_reset[32], c_frame[32], c_zbash[32], c_dim[32], c_path[32], c_git[32], c_dirty[32], c_green[32], c_red[32];
     snprintf(c_reset, sizeof(c_reset), "%s\033[0m%s", esc_s, esc_e);
-    snprintf(c_gray, sizeof(c_gray), "%s\033[38;5;242m%s", esc_s, esc_e);
-    snprintf(c_yellow, sizeof(c_yellow), "%s\033[1;33m%s", esc_s, esc_e);
-    snprintf(c_cyan, sizeof(c_cyan), "%s\033[1;36m%s", esc_s, esc_e);
-    snprintf(c_dim, sizeof(c_dim), "%s\033[2m%s", esc_s, esc_e);
-    snprintf(c_blue, sizeof(c_blue), "%s\033[1;34m%s", esc_s, esc_e);
-    snprintf(c_magenta, sizeof(c_magenta), "%s\033[1;35m%s", esc_s, esc_e);
-    snprintf(c_green, sizeof(c_green), "%s\033[1;32m%s", esc_s, esc_e);
-    snprintf(c_red, sizeof(c_red), "%s\033[1;31m%s", esc_s, esc_e);
+    snprintf(c_frame, sizeof(c_frame), "%s\033[38;5;111m%s", esc_s, esc_e);  /* Soft Slate Blue */
+    snprintf(c_zbash, sizeof(c_zbash), "%s\033[1;38;5;51m%s", esc_s, esc_e);  /* Electric Neon Cyan */
+    snprintf(c_dim, sizeof(c_dim), "%s\033[38;5;244m%s", esc_s, esc_e);      /* Cool Titanium Gray */
+    snprintf(c_path, sizeof(c_path), "%s\033[1;38;5;221m%s", esc_s, esc_e);  /* Warm Amber Gold */
+    snprintf(c_git, sizeof(c_git), "%s\033[1;38;5;205m%s", esc_s, esc_e);    /* Hot Orchid Magenta */
+    snprintf(c_dirty, sizeof(c_dirty), "%s\033[1;38;5;208m%s", esc_s, esc_e);/* Vivid Tangerine Orange */
+    snprintf(c_green, sizeof(c_green), "%s\033[1;38;5;48m%s", esc_s, esc_e);  /* Neon Emerald */
+    snprintf(c_red, sizeof(c_red), "%s\033[1;38;5;196m%s", esc_s, esc_e);    /* Vivid Ruby Red */
 
     char line1[1024];
     char git_part[256] = "";
     if (has_git) {
         if (nerd_fonts) {
             snprintf(git_part, sizeof(git_part), " %son %s\xee\x82\xa0 %s%s%s%s",
-                     c_dim, c_magenta, branch, is_dirty ? c_yellow : "", is_dirty ? "*" : "", c_reset);
+                     c_dim, c_git, branch, is_dirty ? c_dirty : "", is_dirty ? "*" : "", c_reset);
         } else {
             snprintf(git_part, sizeof(git_part), " %son %sgit:(%s)%s%s%s",
-                     c_dim, c_magenta, branch, is_dirty ? c_yellow : "", is_dirty ? "*" : "", c_reset);
+                     c_dim, c_git, branch, is_dirty ? c_dirty : "", is_dirty ? "*" : "", c_reset);
         }
     }
 
@@ -390,17 +390,16 @@ char *zbash_build_prompt(zbash_state_t *state, bool is_libedit) {
     }
 
     snprintf(line1, sizeof(line1),
-             "%s╭─%s %s⚡%s %szbash%s %sin%s %s%s%s%s%s%s",
-             c_gray, c_reset,
-             c_yellow, c_reset,
-             c_cyan, c_reset,
+             "%s╭─%s %szbash%s %sin%s %s%s%s%s%s%s",
+             c_frame, c_reset,
+             c_zbash, c_reset,
              c_dim, c_reset,
-             c_blue, short_path, c_reset,
+             c_path, short_path, c_reset,
              git_part, dur_part, err_part);
 
     const char *arrow_color = (status == 0) ? c_green : c_red;
     char line2[256];
-    snprintf(line2, sizeof(line2), "%s╰─%s%s❯%s ", c_gray, c_reset, arrow_color, c_reset);
+    snprintf(line2, sizeof(line2), "%s╰─%s%s❯%s ", c_frame, c_reset, arrow_color, c_reset);
 
     snprintf(s_prompt_buf, sizeof(s_prompt_buf), "%s\n%s", line1, line2);
     return s_prompt_buf;

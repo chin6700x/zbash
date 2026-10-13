@@ -275,6 +275,17 @@ bool check_func_def(zbash_state_t *state, const char *p) {
 
     if (!b_end) return false;
 
+    const char *after = b_end + 1;
+    while (*after && isspace((unsigned char)*after)) after++;
+    if (*after == ';') {
+        after++;
+        while (*after && isspace((unsigned char)*after)) after++;
+    }
+    if (*after && *after != '#') {
+        /* Line contains further commands or tokens; do not consume entire line here */
+        return false;
+    }
+
     size_t blen = b_end - b_start;
     char *body = malloc(blen + 1);
     strncpy(body, b_start, blen);
@@ -359,11 +370,25 @@ static void extract_for_items(zbash_state_t *state, const char *items_str, char 
             words[count++] = exp ? exp : strdup(tok);
         } else {
             char *src = exp ? exp : tok;
-            char *w_save = NULL;
-            char *w = strtok_r(src, " \t\r\n", &w_save);
-            while (w && count < 256) {
-                words[count++] = strdup(w);
-                w = strtok_r(NULL, " \t\r\n", &w_save);
+            char **bwords = zbash_expand_braces(src);
+            if (bwords) {
+                for (size_t b_idx = 0; bwords[b_idx] && count < 256; b_idx++) {
+                    char *w_save = NULL;
+                    char *w = strtok_r(bwords[b_idx], " \t\r\n", &w_save);
+                    while (w && count < 256) {
+                        words[count++] = strdup(w);
+                        w = strtok_r(NULL, " \t\r\n", &w_save);
+                    }
+                    free(bwords[b_idx]);
+                }
+                free(bwords);
+            } else {
+                char *w_save = NULL;
+                char *w = strtok_r(src, " \t\r\n", &w_save);
+                while (w && count < 256) {
+                    words[count++] = strdup(w);
+                    w = strtok_r(NULL, " \t\r\n", &w_save);
+                }
             }
             if (exp) free(exp);
         }
@@ -746,6 +771,7 @@ int exec_while(zbash_state_t *state, const char *cmd) {
     int body_start_line = while_start_line + nl_before_body;
 
     int iters = 0;
+    int last_body_status = 0;
     state->loop_depth++;
     while (1) {
         bool saved_errexit = state->errexit;
@@ -754,12 +780,13 @@ int exec_while(zbash_state_t *state, const char *cmd) {
         state->errexit = saved_errexit;
         state->should_exit = false;
         if (is_until ? (cond_rc == 0) : (cond_rc != 0)) {
-            if (iters == 0) state->last_status = 0;
+            state->last_status = last_body_status;
             break;
         }
         iters++;
         if (body_buf[0]) {
             run_loop_body(state, body_buf, body_start_line);
+            last_body_status = state->last_status;
         }
         if (state->loop_continue) {
             if (state->loop_continue_count > 1) {
@@ -785,7 +812,7 @@ int exec_while(zbash_state_t *state, const char *cmd) {
     }
     state->loop_depth--;
 
-    if (iters == 0) state->last_status = 0;
+    state->last_status = (iters == 0) ? 0 : last_body_status;
     if (has_redir) {
         fflush(stdout);
         fflush(stderr);
@@ -1177,8 +1204,17 @@ int exec_for_in(zbash_state_t *state, const char *cmd) {
                         p += 4;
                         break;
                     }
-                } else if (is_word_match(p, "do", 2) || is_word_match(p, "then", 4) || is_word_match(p, "else", 4) || is_word_match(p, "elif", 4)) {
+                } else if (is_word_match(p, "do", 2)) {
                     cmd_start = true;
+                    if (body_len + 1 < sizeof(body_buf)) body_buf[body_len++] = *p++;
+                    if (body_len + 1 < sizeof(body_buf)) body_buf[body_len++] = *p++;
+                    continue;
+                } else if (is_word_match(p, "then", 4) || is_word_match(p, "else", 4) || is_word_match(p, "elif", 4)) {
+                    cmd_start = true;
+                    for (int k = 0; k < 4 && *p; k++) {
+                        if (body_len + 1 < sizeof(body_buf)) body_buf[body_len++] = *p++;
+                    }
+                    continue;
                 }
             }
             if (*p == ';' || *p == '\n' || *p == '|' || *p == '&' || *p == '(' || *p == ')') {
