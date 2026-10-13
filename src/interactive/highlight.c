@@ -6,6 +6,8 @@
 
 #include "highlight.h"
 #include "prompt.h"
+#include "flag_db.h"
+#include "hover_box.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -403,7 +405,7 @@ static bool enable_raw_mode(void) {
     return true;
 }
 
-/* Repaint current line with Monaco-grade highlighting */
+/* Repaint current line with Monaco-grade highlighting and live flag ribbon */
 static void repaint_line(zbash_state_t *state, const char *line_buf, size_t line_len, size_t cursor_pos, int prompt_visual_width) {
     char *highlighted = zbash_highlight_line(state, line_buf, line_len, cursor_pos);
 
@@ -422,7 +424,23 @@ static void repaint_line(zbash_state_t *state, const char *line_buf, size_t line
     /* Clear any remaining characters to right */
     printf("\033[K");
 
-    /* Reposition cursor to current edit position */
+    /* Inspect ribbon for parameter hints / flag explanation */
+    char *ribbon = zbash_inspect_ribbon(line_buf, line_len, cursor_pos);
+
+    /* Save cursor position (DECSC \0337) */
+    printf("\0337");
+
+    /* Move down 1 row to ribbon line */
+    printf("\n\r\033[2K");
+    if (ribbon && *ribbon) {
+        fputs(ribbon, stdout);
+        free(ribbon);
+    }
+
+    /* Restore cursor position (DECRC \0338) */
+    printf("\0338");
+
+    /* Reposition cursor horizontally to current edit position */
     int target_col = prompt_visual_width + (int)cursor_pos + 1;
     printf("\033[%dG", target_col);
     fflush(stdout);
@@ -459,6 +477,9 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
     int hist_index = state ? state->history_count : 0;
     char *saved_draft = NULL;
 
+    /* Ensure a row is allocated beneath prompt for parameter hint ribbon */
+    printf("\r\n\033[A");
+
     repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
 
     while (1) {
@@ -468,7 +489,7 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Enter key */
         if (c == '\r' || c == '\n') {
-            printf("\r\n");
+            printf("\n\r\033[2K\r");
             fflush(stdout);
             disable_raw_mode();
             if (saved_draft) free(saved_draft);
@@ -477,7 +498,7 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Ctrl-C */
         if (c == 3) {
-            printf("^C\r\n");
+            printf("^C\n\r\033[2K\r");
             fflush(stdout);
             disable_raw_mode();
             if (saved_draft) free(saved_draft);
@@ -488,7 +509,7 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
         /* Ctrl-D (EOF or delete char) */
         if (c == 4) {
             if (line_len == 0) {
-                printf("\r\n");
+                printf("\n\r\033[2K\r");
                 fflush(stdout);
                 disable_raw_mode();
                 if (saved_draft) free(saved_draft);
@@ -560,7 +581,14 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Ctrl-L: Clear screen */
         if (c == 12) {
-            printf("\033[H\033[2J");
+            printf("\033[H\033[2J\r\n\033[A");
+            repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+            continue;
+        }
+
+        /* Tab key (Monaco Hover Help / Completion) */
+        if (c == '\t') {
+            zbash_show_hover_help(line_buf, line_len, cursor_pos);
             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
             continue;
         }
@@ -569,7 +597,22 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
         if (c == 27) {
             char seq[5] = {0};
             if (read(STDIN_FILENO, &seq[0], 1) <= 0) continue;
+
+            /* Alt-H / Esc-h / Esc-? -> Trigger Monaco Hover Help Box */
+            if (seq[0] == 'h' || seq[0] == 'H' || seq[0] == '?') {
+                zbash_show_hover_help(line_buf, line_len, cursor_pos);
+                repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+                continue;
+            }
+
             if (read(STDIN_FILENO, &seq[1], 1) <= 0) continue;
+
+            /* F1 in Xterm/macOS Terminal: \033OP */
+            if (seq[0] == 'O' && seq[1] == 'P') {
+                zbash_show_hover_help(line_buf, line_len, cursor_pos);
+                repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+                continue;
+            }
 
             if (seq[0] == '[') {
                 switch (seq[1]) {

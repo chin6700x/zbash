@@ -43,7 +43,9 @@ SRCS = src/main.c src/core/engine.c src/core/prompt.c src/core/variables.c src/c
        src/builtins/builtin_caller.c \
        src/builtins/builtin_history.c \
        src/builtins/builtin_jobs.c \
-       src/interactive/highlight.c
+       src/interactive/highlight.c \
+       src/interactive/flag_db.c \
+       src/interactive/hover_box.c
 OBJS = $(SRCS:.c=.o)
 
 ifeq ($(UNAME_M),arm64)
@@ -75,6 +77,8 @@ test: $(BIN_DIR)/zbash
 	@bash test/test_zbash.sh
 	@bash test/test_phase3_ux.sh
 	@bash test/test_highlight.sh
+	@bash test/test_flag_ribbon.sh
+	@bash test/test_hover_box.sh
 
 arena: $(BIN_DIR)/zbash
 	@bash arena/arena_zbash.sh
