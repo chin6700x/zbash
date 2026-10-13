@@ -1,0 +1,404 @@
+.\" Author: Wirot Chookeaw (chin6700x)
+.\" Copyright: (c) 2026 Wirot Chookeaw.
+.\" License: Apache License 2.0
+.Dd October 13, 2026
+.Dt ZBASH 1
+.Os Darwin
+.Sh NAME
+.Nm zbash
+.Nd high-performance silicon command language interpreter and interactive shell
+.Sh SYNOPSIS
+.Nm
+.Op Fl c Ar string
+.Op Fl i
+.Op Fl s
+.Op Fl \-version
+.Op Fl \-help
+.Op Ar file Op Ar argument ...
+.Sh DESCRIPTION
+.Nm
+is a modern, bare-metal command language interpreter and interactive shell engineered
+specifically for Apple Silicon and POSIX systems.
+It combines a hardware-accelerated SIMD vector lexer, a zero-copy pipeline execution engine,
+and an ergonomic interactive environment featuring dynamic multi-line prompting,
+real-time repository inspection, automated directory stack tracking, and lifecycle event hooks.
+.Pp
+When invoked with standard input attached to a terminal,
+.Nm
+runs in interactive mode, providing advanced line editing, persistent command history synchronization,
+and visual status indicators.
+When invoked with a script file or via a pipe,
+.Nm
+executes non-interactively with maximum throughput and zero overhead.
+.Sh OPTIONS
+.Bl -tag -width indent
+.It Fl c Ar string
+Commands are read from
+.Ar string .
+If there are arguments after the string, they are assigned to the positional parameters,
+starting with
+.Va $0 .
+.It Fl i
+Force the shell to run in interactive mode.
+.It Fl s
+Read commands from the standard input.
+Positional parameters are set to any remaining arguments.
+.It Fl \-help
+Display a summary of available command-line options and exit.
+.It Fl \-version
+Display shell version, architecture, and copyright information, then exit.
+.El
+.Sh INVOCATION AND STARTUP FILES
+Upon initialization,
+.Nm
+determines whether it is executing interactively or as a login shell:
+.Bl -tag -width ".Pa ~/.zbash_history"
+.It Pa /etc/zprofile
+Read by login shells before user configuration files.
+.It Pa ~/.zprofile
+Read by interactive login shells.
+.It Pa ~/.zbashrc
+Read by interactive shells on startup.
+This is the primary location for user aliases, environment definitions, and hook functions.
+.It Pa ~/.zbash_history
+The persistent history file where interactive commands are stored and synchronized across terminal sessions.
+.El
+.Sh INTERACTIVE ENVIRONMENT
+.Nm
+provides a rich, responsive interactive terminal experience designed for modern developer ergonomics:
+.Ss Two-Line Visual Hierarchy Prompt
+By default, interactive sessions render a two-line structured prompt:
+.Bd -literal -offset indent
+╭─ zbash in ~/projects/engine on git:(main)*
+╰─❯ command
+.Ed
+.Bl -bullet
+.It
+.Sy Context Bar (Top Line):
+Displays the active shell name, current working directory (compacted with
+.Ql ~
+or path ellipses), and active source control information.
+.It
+.Sy Input Indicator (Bottom Line):
+Displays an Emerald arrow
+.Pq Ql ╰─❯
+upon successful command completion
+.Pq Va $? No = 0 ,
+or a Ruby red arrow displaying the non-zero exit code
+.Pq e.g. Ql [127]
+when a command fails.
+.It
+.Sy Native Repository Inspection:
+Inspects repository branches and working tree status directly in memory without spawning external child processes,
+ensuring instantaneous prompt rendering.
+.It
+.Sy Execution Duration:
+Commands requiring measurable wall-clock time record their execution duration in milliseconds,
+exported to the environment variable
+.Va ZBASH_CMD_DURATION .
+.El
+.Ss Line Editing and Keybindings
+Interactive input uses native terminal line editing supporting standard editing modes:
+.Bl -bullet
+.It
+.Sy Emacs Mode (Default):
+Provides standard navigation shortcuts including
+.Ic Ctrl-A
+(beginning of line),
+.Ic Ctrl-E
+(end of line),
+.Ic Ctrl-K
+(kill to end of line),
+.Ic Ctrl-U
+(kill entire line),
+.Ic Ctrl-W
+(kill preceding word),
+.Ic Alt-F
+(forward word),
+.Ic Alt-B
+(backward word), and
+.Ic Ctrl-R
+(reverse incremental history search).
+.It
+.Sy Vi Mode:
+Enabled via
+.Ic set -o vi
+for modal command and insert editing.
+.It
+.Sy Tab Completion:
+Pressing
+.Ic Tab
+invokes context-aware filename and command completion.
+.El
+.Sh LIFECYCLE EVENT HOOKS
+.Nm
+features native lifecycle hook functions that allow users to intercept and execute custom code
+during key shell events without wrapping external tools:
+.Bl -tag -width "preexec"
+.It Ic precmd
+Executed automatically immediately before each prompt is rendered.
+Ideal for updating terminal window titles or setting dynamic status indicators.
+.Bd -literal -offset indent
+precmd() {
+    print -n "\\033]0;${PWD}\\007"
+}
+.Ed
+.It Ic preexec
+Executed immediately after a command is entered and before execution begins.
+The full command string is passed as the first parameter
+.Pq Va $1 .
+.Bd -literal -offset indent
+preexec() {
+    echo "[executing: $1]"
+}
+.Ed
+.It Ic chpwd
+Executed automatically whenever the current working directory changes via
+.Ic cd ,
+.Ic pushd ,
+or
+.Ic popd .
+.Bd -literal -offset indent
+chpwd() {
+    ls -la
+}
+.Ed
+.El
+.Sh DIRECTORY STACK AND NAVIGATION
+In addition to standard directory changes,
+.Nm
+maintains an in-memory directory history stack:
+.Bl -tag -width "pushd"
+.It Ic cd Op Fl L | Fl P Op Ar dir
+Changes the current working directory to
+.Ar dir .
+If
+.Ar dir
+is omitted, defaults to the user's home directory.
+If
+.Ar dir
+is
+.Ql - ,
+switches to
+.Va $OLDPWD .
+Respects the colon-separated search path defined in
+.Va $CDPATH .
+.It Ic pushd Op Ar dir | +N | -N Op Fl n
+Pushes the target directory onto the directory stack
+.Va DIRSTACK ,
+or rotates stack entries.
+.It Ic popd Op +N | -N Op Fl n
+Removes entries from the top or specified offset of the directory stack.
+.It Ic dirs Op Fl c | Fl l | Fl p | Fl v
+Displays the contents of the directory stack.
+With
+.Fl v ,
+displays entries numbered on separate lines.
+.It Va DIRSTACK
+An indexed array containing the current directory stack, with
+.Va ${DIRSTACK[0]}
+representing the active working directory.
+.El
+.Sh COMMAND HISTORY AND MULTI-SESSION SYNCHRONIZATION
+.Nm
+manages command history with instant synchronization:
+.Bl -bullet
+.It
+.Sy Real-Time Persistence:
+Executed commands are immediately appended to
+.Pa ~/.zbash_history ,
+making command history instantaneously available to concurrent terminal windows and tabs.
+.It
+.Sy Duplicate Suppression:
+Unique history tracking prevents repetitive consecutive commands from cluttering history storage.
+.It
+.Sy History Control Variables:
+.Bl -tag -width "HISTCONTROL"
+.It Va HISTSIZE
+Maximum number of command lines retained in session memory (default: 2000).
+.It Va HISTFILE
+Path to the persistent history file.
+.It Va HISTCONTROL
+Colon-separated flags such as
+.Ql ignoredups
+(ignore duplicate lines) and
+.Ql ignorespace
+(ignore lines starting with whitespace).
+.It Va HISTIGNORE
+Colon-separated glob patterns defining commands to exclude from history recording.
+.El
+.El
+.Sh PARAMETERS AND ARRAYS
+.Nm
+supports standard shell variables, indexed arrays, and associative hash maps:
+.Ss Indexed Arrays
+Indexed arrays are zero-based
+.Pq Va ${arr[0]} :
+.Bd -literal -offset indent
+fruits=(apple banana cherry)
+echo "${fruits[0]}"       # Outputs: apple
+echo "${fruits[@]}"       # Outputs all elements
+echo "${#fruits[@]}"      # Outputs array length (3)
+.Ed
+.Ss Associative Arrays
+Associative arrays (hash maps) are declared using
+.Ic declare -A
+or
+.Ic typeset -A :
+.Bd -literal -offset indent
+declare -A user_roles
+user_roles[alice]="admin"
+user_roles[bob]="engineer"
+echo "${user_roles[alice]}"  # Outputs: admin
+.Ed
+.Ss Special Parameters
+.Bl -tag -width "$?"
+.It Va $?
+Exit status of the most recently executed foreground pipeline.
+.It Va $#
+Number of positional parameters passed to the current shell or function.
+.It Va $$
+Process ID of the active shell instance.
+.It Va $!
+Process ID of the most recently started background job.
+.It Va $0
+Name of the shell or script currently executing.
+.It Va $@ , $*
+Expands to the positional parameters.
+When double-quoted,
+.Ql "$@"
+expands each parameter as a distinct word.
+.El
+.Sh BUILTIN COMMANDS
+.Nm
+includes a comprehensive suite of high-performance builtins:
+.Bl -tag -width "readonly"
+.It Ic alias Op Ar name[=value] ...
+Defines or prints command aliases.
+.It Ic builtin Ar builtin-name Op Ar arg ...
+Executes a shell builtin directly, bypassing shell functions with the same name.
+.It Ic caller Op Ar expr
+Returns the context of any active subroutine call in the execution frame stack.
+.It Ic cd Op Fl L | Fl P Op Ar dir
+Changes working directory.
+.It Ic command Op Fl p Op Fl v | Fl V Ar command Op Ar arg ...
+Runs a command bypassing shell function lookups.
+.It Ic declare Op Fl a | Fl A | Fl i | Fl l | Fl r | Fl x | Fl p Op Ar name[=val] ...
+Declares shell variables, attributes, indexed arrays, or associative hash maps.
+.It Ic dirs Op Fl c | Fl l | Fl p | Fl v
+Displays directory stack entries.
+.It Ic disown Op Fl h | Fl a | Fl r Op Ar jobspec ...
+Removes jobs from active job table management.
+.It Ic echo Op Fl n | Fl e | Fl E Op Ar string ...
+Outputs strings to standard output with optional escape sequence interpretation.
+.It Ic eval Op Ar arg ...
+Concatenates arguments and evaluates them as a shell command.
+.It Ic exec Op Fl cl Op Fl a Ar name Op Ar command Op Ar arg ...
+Replaces the active shell process with the specified command.
+.It Ic exit Op Ar n
+Terminates the shell with exit code
+.Ar n .
+.It Ic export Op Fl n | Fl f | Fl p Op Ar name[=val] ...
+Marks variables for automatic export to the environments of child processes.
+.It Ic fc Op Fl e Ar ename Op Fl nlr Op Ar first Op Ar last
+Selects and re-executes or edits commands from the history list.
+.It Ic fg Op Ar jobspec , Ic bg Op Ar jobspec ...
+Moves jobs between foreground and background execution.
+.It Ic help Op Fl s Op Ar pattern
+Displays native contextual documentation and synopses for builtin commands.
+.It Ic history Op Fl c | Fl d Ar offset | Fl awrn Op Ar filename
+Displays or manipulates the active command history list.
+.It Ic jobs Op Fl l | Fl p | Fl n | Fl r | Fl s Op Ar jobspec ...
+Lists active background jobs and their state.
+.It Ic kill Op Fl s Ar sigspec | Fl n Ar signum | Fl Ar sigspec Ar pid | jobspec ...
+Sends signals to processes or background jobs.
+.It Ic let Ar expr Op Ar expr ...
+Evaluates arithmetic expressions.
+.It Ic local Op Ar name[=val] ...
+Declares variables scoped locally within the active function frame.
+.It Ic popd Op +N | -N Op Fl n
+Removes entries from the directory stack.
+.It Ic printf Ar format Op Ar arguments ...
+Formats and prints arguments according to format specification strings.
+.It Ic pushd Op Ar dir | +N | -N Op Fl n
+Pushes a directory onto the directory stack.
+.It Ic pwd Op Fl L | Fl P
+Prints the absolute path of the current working directory.
+.It Ic read Op Fl r Op Fl p Ar prompt Op Fl t Ar timeout Op Fl a Ar array Op Fl n Ar nchars Op Fl s Op Ar name ...
+Reads a line from standard input into shell variables.
+.It Ic readonly Op Fl p | Fl a | Fl A Op Ar name[=val] ...
+Marks variables or arrays as read-only.
+.It Ic return Op Ar n
+Exits a shell function with return status
+.Ar n .
+.It Ic set Op Fl e | Fl u | Fl x | Fl v | Fl o Ar option Op Fl \- Ar arg ...
+Configures shell environment options and positional parameters.
+.It Ic shift Op Ar n
+Shifts positional parameters left by
+.Ar n
+positions.
+.It Ic shopt Op Fl s | Fl u Op Fl p | Fl q Op Ar optname ...
+Toggles optional shell behavior settings.
+.It Ic source Ar filename Op Ar arguments ...
+Reads and executes commands from
+.Ar filename
+in the current shell context.
+.It Ic test Ar expr , Ic [ Ar expr ]
+Evaluates conditional expressions.
+.It Ic [[ Ar expression ]]
+Evaluates advanced conditional expressions with pattern comparison.
+.It Ic trap Op Fl l | Fl p Op Ar action Ar sigspec ...
+Defines signal handlers and termination traps.
+.It Ic typeset
+Identical to
+.Ic declare .
+.It Ic unalias Op Fl a Op Ar name ...
+Removes command aliases.
+.It Ic unset Op Fl v | Fl f Op Ar name ...
+Unsets shell variables or functions.
+.It Ic wait Op Ar pid | jobspec ...
+Waits for background processes or jobs to terminate and returns their exit code.
+.El
+.Sh ENVIRONMENT
+.Bl -tag -width "ZBASH_CMD_DURATION"
+.It Va CDPATH
+The search path for the
+.Ic cd
+builtin.
+.It Va HOME
+The default directory for the
+.Ic cd
+builtin.
+.It Va OLDPWD
+The previous working directory set by the
+.Ic cd
+builtin.
+.It Va PATH
+The search path for executable programs.
+.It Va PWD
+The current working directory.
+.It Va ZBASH_CMD_DURATION
+The duration of the last foreground command in milliseconds.
+.El
+.Sh FILES
+.Bl -tag -width "/etc/zprofile"
+.It Pa /etc/zprofile
+Global system initialization file for login shells.
+.It Pa ~/.zprofile
+User initialization file for login shells.
+.It Pa ~/.zbashrc
+User initialization file for interactive shells.
+.It Pa ~/.zbash_history
+Default persistent history file.
+.El
+.Sh STANDARDS
+.Nm
+complies with POSIX.1-2017 (IEEE Std 1003.1-2017) shell language specifications
+while providing high-velocity silicon optimizations and modern interactive developer ergonomics.
+.Sh AUTHORS
+.Nm
+was designed and engineered by
+.An Wirot Chookeaw Aq chin6700x .
+.Sh COPYRIGHT
+Copyright \(co 2026 Wirot Chookeaw.
+Licensed under the Apache License, Version 2.0.
