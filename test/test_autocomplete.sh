@@ -17,6 +17,8 @@ clang -O3 -Wall -Wextra -Iinclude \
     src/interactive/autocomplete.c \
     src/interactive/flag_db.c \
     src/interactive/hover_box.c \
+    src/interactive/highlight.o \
+    src/core/prompt.o \
     src/builtins/builtins.o \
     src/core/exec.o \
     src/core/control.o \

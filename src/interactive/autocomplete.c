@@ -392,7 +392,7 @@ size_t zbash_get_completions(zbash_state_t *state, const char *line, size_t len,
 }
 
 /* ========================================================================= */
-/* 4. Sub-50ns Inline Ghost Text Finder                                      */
+/* 4. Sub-50ns Inline Ghost Text Finder with History Quality Sanitizer      */
 /* ========================================================================= */
 
 bool zbash_find_inline_ghost(zbash_state_t *state, const char *line, size_t len, 
@@ -405,6 +405,38 @@ bool zbash_find_inline_ghost(zbash_state_t *state, const char *line, size_t len,
         for (int i = state->history_count - 1; i >= max_check; i--) {
             const char *hline = state->history_lines[i];
             if (hline && strncmp(hline, line, len) == 0 && strlen(hline) > len) {
+                /* History Quality Sanitizer: extract command word and ensure it is valid */
+                char cmd_word[64] = {0};
+                size_t cw = 0;
+                while (hline[cw] && !isspace((unsigned char)hline[cw]) && cw < sizeof(cmd_word) - 1) {
+                    cmd_word[cw] = hline[cw];
+                    cw++;
+                }
+                cmd_word[cw] = '\0';
+
+                bool is_valid = zbash_is_builtin(cmd_word) || zbash_path_cache_lookup(cmd_word);
+                if (!is_valid && state && state->func_count > 0) {
+                    for (int f = 0; f < state->func_count; f++) {
+                        if (state->funcs[f].name && strcmp(state->funcs[f].name, cmd_word) == 0) {
+                            is_valid = true;
+                            break;
+                        }
+                    }
+                }
+                if (!is_valid && state && state->alias_count > 0) {
+                    for (int a = 0; a < state->alias_count; a++) {
+                        if (state->aliases[a].name && strcmp(state->aliases[a].name, cmd_word) == 0) {
+                            is_valid = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!is_valid) {
+                    /* Skip invalid commands / typos from history (e.g. whoiam, howami) */
+                    continue;
+                }
+
                 strncpy(out_ghost->full_text, hline, sizeof(out_ghost->full_text) - 1);
                 strncpy(out_ghost->display_suffix, hline + len, sizeof(out_ghost->display_suffix) - 1);
                 out_ghost->type = COMPLETE_HISTORY;
@@ -414,29 +446,159 @@ bool zbash_find_inline_ghost(zbash_state_t *state, const char *line, size_t len,
         }
     }
 
-    /* 2. Prefix Lookup */
+    /* 2. Trailing Space Suppression: do not synthesize ghost text immediately after whitespace */
+    if (isspace((unsigned char)line[len - 1])) {
+        return false;
+    }
+
+    /* 3. Prefix Lookup */
     zbash_candidate_list_t list;
     size_t count = zbash_get_completions(state, line, len, cursor_pos, &list);
     if (count > 0 && list.items) {
-        /* Choose the best candidate: exact or shortest */
-        size_t best_idx = 0;
-        size_t min_len = strlen(list.items[0].full_text);
+        /* Choose the best candidate with a non-empty ghost suffix */
+        ssize_t best_idx = -1;
+        size_t min_len = (size_t)-1;
 
-        for (size_t i = 1; i < count; i++) {
-            size_t clen = strlen(list.items[i].full_text);
-            if (clen < min_len) {
-                min_len = clen;
-                best_idx = i;
+        for (size_t i = 0; i < count; i++) {
+            if (list.items[i].display_suffix[0] != '\0') {
+                size_t clen = strlen(list.items[i].full_text);
+                if (clen < min_len) {
+                    min_len = clen;
+                    best_idx = (ssize_t)i;
+                }
             }
         }
 
-        *out_ghost = list.items[best_idx];
-        zbash_candidate_list_free(&list);
-        return (out_ghost->display_suffix[0] != '\0');
+        if (best_idx >= 0) {
+            *out_ghost = list.items[best_idx];
+            zbash_candidate_list_free(&list);
+            return true;
+        }
     }
 
     zbash_candidate_list_free(&list);
     return false;
+}
+
+/* ========================================================================= */
+/* 5. Circular Inline Tab Cycling Engine                                     */
+/* ========================================================================= */
+
+typedef struct {
+    bool active;
+    zbash_candidate_list_t candidates;
+    size_t current_index;
+    char original_prefix[128];
+    size_t replace_start;
+    size_t replace_len;
+} tab_cycle_session_t;
+
+static tab_cycle_session_t s_tab_cycle = {0};
+
+void zbash_tab_cycle_reset(void) {
+    if (s_tab_cycle.active) {
+        zbash_candidate_list_free(&s_tab_cycle.candidates);
+        memset(&s_tab_cycle, 0, sizeof(s_tab_cycle));
+    }
+}
+
+bool zbash_tab_cycle_is_active(void) {
+    return s_tab_cycle.active;
+}
+
+bool zbash_tab_cycle_next(zbash_state_t *state, char *line_buf, size_t *line_len, 
+                          size_t *cursor_pos, char *out_ribbon, size_t max_ribbon) {
+    if (!line_buf || !line_len || !cursor_pos) return false;
+
+    if (!s_tab_cycle.active) {
+        /* Start new Tab cycle */
+        memset(&s_tab_cycle, 0, sizeof(s_tab_cycle));
+        size_t count = zbash_get_completions(state, line_buf, *line_len, *cursor_pos, &s_tab_cycle.candidates);
+        if (count == 0) {
+            zbash_tab_cycle_reset();
+            return false;
+        }
+
+        s_tab_cycle.active = true;
+        s_tab_cycle.current_index = 0;
+        s_tab_cycle.replace_start = s_tab_cycle.candidates.replace_start;
+        s_tab_cycle.replace_len = s_tab_cycle.candidates.replace_len;
+
+        size_t olen = s_tab_cycle.replace_len;
+        if (olen >= sizeof(s_tab_cycle.original_prefix)) olen = sizeof(s_tab_cycle.original_prefix) - 1;
+        memcpy(s_tab_cycle.original_prefix, line_buf + s_tab_cycle.replace_start, olen);
+        s_tab_cycle.original_prefix[olen] = '\0';
+    } else {
+        /* Already cycling -> advance to next candidate (Circular Round-Robin) */
+        if (s_tab_cycle.candidates.count > 0) {
+            s_tab_cycle.current_index = (s_tab_cycle.current_index + 1) % s_tab_cycle.candidates.count;
+        }
+    }
+
+    if (s_tab_cycle.candidates.count == 0) {
+        zbash_tab_cycle_reset();
+        return false;
+    }
+
+    /* Replace the token in line_buf with current candidate */
+    size_t idx = s_tab_cycle.current_index;
+    const char *cand_text = s_tab_cycle.candidates.items[idx].full_text;
+    size_t cand_len = strlen(cand_text);
+    size_t rep_start = s_tab_cycle.replace_start;
+    size_t current_tok_len = *cursor_pos - rep_start;
+
+    size_t tail_len = *line_len - (rep_start + current_tok_len);
+    memmove(line_buf + rep_start + cand_len, line_buf + rep_start + current_tok_len, tail_len + 1);
+    memcpy(line_buf + rep_start, cand_text, cand_len);
+
+    *line_len = rep_start + cand_len + tail_len;
+    *cursor_pos = rep_start + cand_len;
+    line_buf[*line_len] = '\0';
+
+    /* Build status ribbon: e.g. "💡 [1/3] whoami │ [2/3] whois │ [3/3] who" */
+    if (out_ribbon && max_ribbon > 0) {
+        out_ribbon[0] = '\0';
+        size_t rpos = 0;
+        rpos += snprintf(out_ribbon + rpos, max_ribbon - rpos,
+            "\033[38;5;220m💡\033[0m \033[38;5;244m[%zu/%zu]\033[0m ",
+            idx + 1, s_tab_cycle.candidates.count);
+
+        for (size_t i = 0; i < s_tab_cycle.candidates.count && rpos < max_ribbon - 40; i++) {
+            if (i > 0) {
+                rpos += snprintf(out_ribbon + rpos, max_ribbon - rpos, " \033[38;5;240m│\033[0m ");
+            }
+            if (i == idx) {
+                /* Active selected candidate in Bold Neon Emerald Green */
+                rpos += snprintf(out_ribbon + rpos, max_ribbon - rpos,
+                    "\033[1;38;5;48m▸ %s\033[0m", s_tab_cycle.candidates.items[i].full_text);
+            } else {
+                /* Inactive candidate in subtle gray */
+                rpos += snprintf(out_ribbon + rpos, max_ribbon - rpos,
+                    "\033[38;5;246m%s\033[0m", s_tab_cycle.candidates.items[i].full_text);
+            }
+        }
+    }
+
+    return true;
+}
+
+bool zbash_tab_cycle_cancel(char *line_buf, size_t *line_len, size_t *cursor_pos) {
+    if (!s_tab_cycle.active || !line_buf || !line_len || !cursor_pos) return false;
+
+    size_t rep_start = s_tab_cycle.replace_start;
+    size_t cur_tok_len = *cursor_pos > rep_start ? *cursor_pos - rep_start : 0;
+    size_t orig_len = strlen(s_tab_cycle.original_prefix);
+    size_t tail_len = *line_len > (rep_start + cur_tok_len) ? *line_len - (rep_start + cur_tok_len) : 0;
+
+    memmove(line_buf + rep_start + orig_len, line_buf + rep_start + cur_tok_len, tail_len + 1);
+    memcpy(line_buf + rep_start, s_tab_cycle.original_prefix, orig_len);
+
+    *line_len = rep_start + orig_len + tail_len;
+    *cursor_pos = rep_start + orig_len;
+    line_buf[*line_len] = '\0';
+
+    zbash_tab_cycle_reset();
+    return true;
 }
 
 /* ========================================================================= */

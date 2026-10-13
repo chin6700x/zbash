@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -406,6 +407,8 @@ static bool enable_raw_mode(void) {
     return true;
 }
 
+static char s_tab_ribbon_buf[512] = {0};
+
 /* Repaint current line with Monaco-grade highlighting and live flag ribbon */
 static void repaint_line(zbash_state_t *state, const char *line_buf, size_t line_len, size_t cursor_pos, int prompt_visual_width) {
     char *highlighted = zbash_highlight_line(state, line_buf, line_len, cursor_pos);
@@ -422,8 +425,8 @@ static void repaint_line(zbash_state_t *state, const char *line_buf, size_t line
         free(highlighted);
     }
 
-    /* Render Inline Ghost Text (Titanium Gray) if cursor is at end of line */
-    if (cursor_pos == line_len && line_len > 0) {
+    /* Render Inline Ghost Text (Titanium Gray) if cursor is at end of line and not in tab cycle */
+    if (!zbash_tab_cycle_is_active() && cursor_pos == line_len && line_len > 0) {
         zbash_candidate_t ghost;
         if (zbash_find_inline_ghost(state, line_buf, line_len, cursor_pos, &ghost)) {
             printf("\033[38;5;242m%s\033[0m", ghost.display_suffix);
@@ -433,8 +436,13 @@ static void repaint_line(zbash_state_t *state, const char *line_buf, size_t line
     /* Clear any remaining characters to right */
     printf("\033[K");
 
-    /* Inspect ribbon for parameter hints / flag explanation */
-    char *ribbon = zbash_inspect_ribbon(line_buf, line_len, cursor_pos);
+    /* Inspect ribbon for parameter hints / flag explanation or tab cycle status */
+    char *ribbon = NULL;
+    if (zbash_tab_cycle_is_active() && s_tab_ribbon_buf[0] != '\0') {
+        ribbon = strdup(s_tab_ribbon_buf);
+    } else {
+        ribbon = zbash_inspect_ribbon(line_buf, line_len, cursor_pos);
+    }
 
     /* Save cursor position (DECSC \0337) */
     printf("\0337");
@@ -489,6 +497,9 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
     /* Ensure a row is allocated beneath prompt for parameter hint ribbon */
     printf("\r\n\033[A");
 
+    zbash_tab_cycle_reset();
+    s_tab_ribbon_buf[0] = '\0';
+
     repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
 
     while (1) {
@@ -498,6 +509,22 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Enter key */
         if (c == '\r' || c == '\n') {
+            /* Enter-Accept Paradigm: Auto-absorb ghost text if at end of line */
+            if (!zbash_tab_cycle_is_active() && cursor_pos == line_len && line_len > 0) {
+                zbash_candidate_t ghost;
+                if (zbash_find_inline_ghost(state, line_buf, line_len, cursor_pos, &ghost)) {
+                    size_t slen = strlen(ghost.display_suffix);
+                    if (line_len + slen < sizeof(line_buf) - 1) {
+                        memcpy(line_buf + line_len, ghost.display_suffix, slen);
+                        line_len += slen;
+                        cursor_pos = line_len;
+                        line_buf[line_len] = '\0';
+                        repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+                    }
+                }
+            }
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             printf("\n\r\033[2K\r");
             fflush(stdout);
             disable_raw_mode();
@@ -507,6 +534,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Ctrl-C */
         if (c == 3) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             printf("^C\n\r\033[2K\r");
             fflush(stdout);
             disable_raw_mode();
@@ -517,6 +546,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Ctrl-D (EOF or delete char) */
         if (c == 4) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             if (line_len == 0) {
                 printf("\n\r\033[2K\r");
                 fflush(stdout);
@@ -534,6 +565,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Backspace */
         if (c == 127 || c == 8) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             if (cursor_pos > 0) {
                 memmove(line_buf + cursor_pos - 1, line_buf + cursor_pos, line_len - cursor_pos + 1);
                 cursor_pos--;
@@ -545,6 +578,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Ctrl-A: Beginning of line */
         if (c == 1) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             cursor_pos = 0;
             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
             continue;
@@ -566,12 +601,16 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
             } else {
                 cursor_pos = line_len;
             }
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
             continue;
         }
 
         /* Ctrl-U: Clear entire line */
         if (c == 21) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             line_len = 0;
             cursor_pos = 0;
             line_buf[0] = '\0';
@@ -581,6 +620,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Ctrl-K: Clear from cursor to end of line */
         if (c == 11) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             line_len = cursor_pos;
             line_buf[line_len] = '\0';
             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
@@ -589,6 +630,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Ctrl-W: Delete word backward */
         if (c == 23) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             if (cursor_pos > 0) {
                 size_t old_pos = cursor_pos;
                 while (cursor_pos > 0 && isspace((unsigned char)line_buf[cursor_pos - 1])) cursor_pos--;
@@ -608,20 +651,34 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
             continue;
         }
 
-        /* Tab key (Monaco Visual Mini-Palette Menu & Autocomplete) */
+        /* Tab key (Circular Inline Tab Cycling) */
         if (c == '\t') {
-            zbash_show_completion_menu(state, line_buf, &line_len, &cursor_pos, prompt_prefix_len);
-            repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+            if (zbash_tab_cycle_next(state, line_buf, &line_len, &cursor_pos, s_tab_ribbon_buf, sizeof(s_tab_ribbon_buf))) {
+                repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+            }
             continue;
         }
 
         /* Escape Sequences */
         if (c == 27) {
+            struct pollfd pfd = { .fd = STDIN_FILENO, .events = POLLIN };
+            if (poll(&pfd, 1, 50) <= 0) {
+                /* Standalone Esc key: Revert Tab Cycle */
+                if (zbash_tab_cycle_is_active()) {
+                    zbash_tab_cycle_cancel(line_buf, &line_len, &cursor_pos);
+                    s_tab_ribbon_buf[0] = '\0';
+                    repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+                }
+                continue;
+            }
+
             char seq[5] = {0};
             if (read(STDIN_FILENO, &seq[0], 1) <= 0) continue;
 
             /* Alt-H / Esc-h / Esc-? -> Trigger Monaco Hover Help Box */
             if (seq[0] == 'h' || seq[0] == 'H' || seq[0] == '?') {
+                zbash_tab_cycle_reset();
+                s_tab_ribbon_buf[0] = '\0';
                 zbash_show_hover_help(line_buf, line_len, cursor_pos);
                 repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                 continue;
@@ -631,6 +688,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
             /* F1 in Xterm/macOS Terminal: \033OP */
             if (seq[0] == 'O' && seq[1] == 'P') {
+                zbash_tab_cycle_reset();
+                s_tab_ribbon_buf[0] = '\0';
                 zbash_show_hover_help(line_buf, line_len, cursor_pos);
                 repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                 continue;
@@ -639,6 +698,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
             if (seq[0] == '[') {
                 switch (seq[1]) {
                     case 'D': /* Left Arrow */
+                        zbash_tab_cycle_reset();
+                        s_tab_ribbon_buf[0] = '\0';
                         if (cursor_pos > 0) {
                             cursor_pos--;
                             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
@@ -647,6 +708,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
                     case 'C': /* Right Arrow */
                         if (cursor_pos < line_len) {
                             cursor_pos++;
+                            zbash_tab_cycle_reset();
+                            s_tab_ribbon_buf[0] = '\0';
                             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                         } else if (cursor_pos == line_len) {
                             /* Accept inline ghost text */
@@ -658,12 +721,16 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
                                     line_len += slen;
                                     cursor_pos = line_len;
                                     line_buf[line_len] = '\0';
+                                    zbash_tab_cycle_reset();
+                                    s_tab_ribbon_buf[0] = '\0';
                                     repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                                 }
                             }
                         }
                         break;
                     case 'A': /* Up Arrow (History Back) */
+                        zbash_tab_cycle_reset();
+                        s_tab_ribbon_buf[0] = '\0';
                         if (state && state->history_count > 0 && hist_index > 0) {
                             if (hist_index == state->history_count) {
                                 if (saved_draft) free(saved_draft);
@@ -681,6 +748,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
                         }
                         break;
                     case 'B': /* Down Arrow (History Forward) */
+                        zbash_tab_cycle_reset();
+                        s_tab_ribbon_buf[0] = '\0';
                         if (state && hist_index < state->history_count) {
                             hist_index++;
                             if (hist_index == state->history_count) {
@@ -705,6 +774,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
                         }
                         break;
                     case 'H': /* Home */
+                        zbash_tab_cycle_reset();
+                        s_tab_ribbon_buf[0] = '\0';
                         cursor_pos = 0;
                         repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                         break;
@@ -724,10 +795,14 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
                         } else {
                             cursor_pos = line_len;
                         }
+                        zbash_tab_cycle_reset();
+                        s_tab_ribbon_buf[0] = '\0';
                         repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                         break;
                     case '3': /* Delete key \033[3~ */
                         if (read(STDIN_FILENO, &seq[2], 1) > 0 && seq[2] == '~') {
+                            zbash_tab_cycle_reset();
+                            s_tab_ribbon_buf[0] = '\0';
                             if (cursor_pos < line_len) {
                                 memmove(line_buf + cursor_pos, line_buf + cursor_pos + 1, line_len - cursor_pos);
                                 line_len--;
@@ -742,6 +817,8 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
 
         /* Printable Characters */
         if ((unsigned char)c >= 32 && line_len + 1 < sizeof(line_buf)) {
+            zbash_tab_cycle_reset();
+            s_tab_ribbon_buf[0] = '\0';
             memmove(line_buf + cursor_pos + 1, line_buf + cursor_pos, line_len - cursor_pos + 1);
             line_buf[cursor_pos] = c;
             line_len++;

@@ -57,6 +57,13 @@ size_t zbash_get_completions(zbash_state_t *state, const char *line, size_t len,
 /* Free memory allocated in candidate list */
 void zbash_candidate_list_free(zbash_candidate_list_t *list);
 
+/* Circular Inline Tab Cycling API */
+bool zbash_tab_cycle_next(zbash_state_t *state, char *line_buf, size_t *line_len, 
+                          size_t *cursor_pos, char *out_ribbon, size_t max_ribbon);
+void zbash_tab_cycle_reset(void);
+bool zbash_tab_cycle_is_active(void);
+bool zbash_tab_cycle_cancel(char *line_buf, size_t *line_len, size_t *cursor_pos);
+
 /* Display Monaco Visual Mini-Palette when multiple candidates exist on Tab */
 bool zbash_show_completion_menu(zbash_state_t *state, char *line_buf, size_t *line_len, 
                                size_t *cursor_pos, int prompt_visual_width);
