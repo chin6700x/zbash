@@ -305,7 +305,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
         return 0;
     }
 
-    bool all_succeeded = true;
+    bool any_succeeded = false;
 
     for (int i = opt_end; i < argc; i++) {
         const char *name = argv[i];
@@ -318,6 +318,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
                 if (strcmp(state->aliases[a].name, name) == 0) {
                     found = true;
                     recognized = true;
+                    any_succeeded = true;
                     if (type_only) {
                         printf("alias\n");
                     } else {
@@ -333,6 +334,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
         if (!path_only && is_shell_keyword(name)) {
             found = true;
             recognized = true;
+            any_succeeded = true;
             if (type_only) {
                 printf("keyword\n");
             } else {
@@ -347,6 +349,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
             if (fn) {
                 found = true;
                 recognized = true;
+                any_succeeded = true;
                 if (type_only) {
                     printf("function\n");
                 } else {
@@ -360,6 +363,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
         if (!path_only && zbash_is_builtin_enabled(state, name)) {
             found = true;
             recognized = true;
+            any_succeeded = true;
             if (type_only) {
                 printf("builtin\n");
             } else {
@@ -381,6 +385,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
                 state->hash_table[hpos].hits++;
                 found = true;
                 recognized = true;
+                any_succeeded = true;
                 if (type_only) {
                     printf("file\n");
                 } else if (path_only) {
@@ -397,6 +402,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
             if (access(name, X_OK) == 0) {
                 found = true;
                 recognized = true;
+                any_succeeded = true;
                 if (type_only) {
                     printf("file\n");
                 } else if (path_only) {
@@ -417,6 +423,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
                 if (zbash_check_exec(full)) {
                     found = true;
                     recognized = true;
+                    any_succeeded = true;
                     if (type_only) {
                         printf("file\n");
                     } else if (path_only) {
@@ -431,8 +438,8 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
             free(path_copy);
         }
 
-        if (!recognized) {
-            all_succeeded = false;
+        if (recognized) {
+            any_succeeded = true;
         }
 
         if (!found) {
@@ -448,7 +455,7 @@ int builtin_type(zbash_state_t *state, int argc, char **argv) {
     }
 
     fflush(stdout);
-    return all_succeeded ? 0 : 1;
+    return any_succeeded ? 0 : 1;
 }
 
 int builtin_eval(zbash_state_t *state, int argc, char **argv) {

@@ -42,7 +42,8 @@ SRCS = src/main.c src/core/engine.c src/core/prompt.c src/core/variables.c src/c
        src/builtins/builtin_dstack.c \
        src/builtins/builtin_caller.c \
        src/builtins/builtin_history.c \
-       src/builtins/builtin_jobs.c
+       src/builtins/builtin_jobs.c \
+       src/interactive/highlight.c
 OBJS = $(SRCS:.c=.o)
 
 ifeq ($(UNAME_M),arm64)
@@ -73,6 +74,7 @@ DEPS = $(SRCS:.c=.d)
 test: $(BIN_DIR)/zbash
 	@bash test/test_zbash.sh
 	@bash test/test_phase3_ux.sh
+	@bash test/test_highlight.sh
 
 arena: $(BIN_DIR)/zbash
 	@bash arena/arena_zbash.sh

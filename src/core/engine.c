@@ -6,6 +6,7 @@
 
 #include "core_internal.h"
 #include "prompt.h"
+#include "highlight.h"
 
 volatile int zbash_suppress_int = 0;
 volatile int zbash_pending_int = 0;
@@ -1734,15 +1735,6 @@ int zbash_run_file(zbash_state_t *state, const char *filepath) {
     return state->should_exit ? state->exit_code : rc;
 }
 
-#if defined(__APPLE__) && !defined(__EMSCRIPTEN__)
-#include <histedit.h>
-
-static char *zbash_prompt_callback(EditLine *el) {
-    zbash_state_t *state = NULL;
-    el_get(el, EL_CLIENTDATA, &state);
-    return zbash_build_prompt(state, true);
-}
-
 int zbash_run_interactive(zbash_state_t *state) {
     if (!isatty(STDIN_FILENO)) {
         return zbash_run_stream(state, stdin);
@@ -1752,18 +1744,6 @@ int zbash_run_interactive(zbash_state_t *state) {
     state->expand_aliases = true;
     zbash_load_rc(state);
 
-    EditLine *el = el_init("zbash", stdin, stdout, stderr);
-    if (!el) {
-        return zbash_run_stream(state, stdin);
-    }
-
-    History *hist = history_init();
-    HistEvent ev;
-    if (hist) {
-        history(hist, &ev, H_SETSIZE, 2000);
-        history(hist, &ev, H_SETUNIQUE, 1);
-    }
-
     const char *home = getenv("HOME");
     char hist_path[1024];
     if (home && *home) {
@@ -1772,28 +1752,17 @@ int zbash_run_interactive(zbash_state_t *state) {
         snprintf(hist_path, sizeof(hist_path), ".zbash_history");
     }
 
-    if (hist) {
-        history(hist, &ev, H_LOAD, hist_path);
-    }
+    zbash_history_load(state, hist_path);
+    zbash_path_cache_init();
 
-    el_set(el, EL_CLIENTDATA, state);
-    el_set(el, EL_PROMPT_ESC, zbash_prompt_callback, '\1');
-    if (hist) {
-        el_set(el, EL_HIST, history, hist);
-    }
-    el_set(el, EL_EDITOR, "emacs");
-    el_set(el, EL_ADDFN, "sh-complete", "Filename and command completion", _el_fn_sh_complete);
-    el_set(el, EL_BIND, "^I", "sh-complete", NULL);
-    el_source(el, NULL);
-
-    int count = 0;
     while (!state->should_exit) {
         zbash_trigger_hook(state, "precmd");
 
-        const char *line = el_gets(el, &count);
-        if (!line || count <= 0) break;
+        char *line = zbash_read_line_highlighted(state);
+        if (!line) break;
 
         char *trimmed = strdup(line);
+        free(line);
         if (!trimmed) continue;
 
         size_t tlen = strlen(trimmed);
@@ -1806,13 +1775,11 @@ int zbash_run_interactive(zbash_state_t *state) {
             continue;
         }
 
-        if (hist) {
-            history(hist, &ev, H_ENTER, trimmed);
-            FILE *hfp = fopen(hist_path, "a");
-            if (hfp) {
-                fprintf(hfp, "%s\n", trimmed);
-                fclose(hfp);
-            }
+        zbash_history_add(state, trimmed);
+        FILE *hfp = fopen(hist_path, "a");
+        if (hfp) {
+            fprintf(hfp, "%s\n", trimmed);
+            fclose(hfp);
         }
 
         struct timespec ts_start, ts_end;
@@ -1832,51 +1799,6 @@ int zbash_run_interactive(zbash_state_t *state) {
         free(trimmed);
     }
 
-    if (hist) {
-        history(hist, &ev, H_SAVE, hist_path);
-        history_end(hist);
-    }
-    el_end(el);
-
+    zbash_path_cache_free();
     return state->should_exit ? state->exit_code : state->last_status;
 }
-#else
-int zbash_run_interactive(zbash_state_t *state) {
-    if (isatty(STDIN_FILENO)) {
-        state->interactive = true;
-        state->expand_aliases = true;
-        zbash_load_rc(state);
-
-        char *line = NULL;
-        size_t cap = 0;
-        ssize_t nread;
-        while (!state->should_exit) {
-            zbash_trigger_hook(state, "precmd");
-            fputs(zbash_build_prompt(state, false), stdout);
-            fflush(stdout);
-            nread = getline(&line, &cap, stdin);
-            if (nread == -1) break;
-            if (nread > 0 && line[nread - 1] == '\n') line[nread - 1] = '\0';
-            if (*line) {
-                struct timespec ts_start, ts_end;
-                clock_gettime(CLOCK_MONOTONIC, &ts_start);
-
-                zbash_trigger_preexec(state, line);
-                zbash_run_line(state, line);
-
-                clock_gettime(CLOCK_MONOTONIC, &ts_end);
-                double elapsed_ms = (ts_end.tv_sec - ts_start.tv_sec) * 1000.0 +
-                                    (ts_end.tv_nsec - ts_start.tv_nsec) / 1000000.0;
-                state->last_cmd_duration_ms = elapsed_ms;
-                char dur_str[32];
-                snprintf(dur_str, sizeof(dur_str), "%.2f", elapsed_ms);
-                setenv("ZBASH_CMD_DURATION", dur_str, 1);
-            }
-        }
-        if (line) free(line);
-        return state->should_exit ? state->exit_code : state->last_status;
-    } else {
-        return zbash_run_stream(state, stdin);
-    }
-}
-#endif
