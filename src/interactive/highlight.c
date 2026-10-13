@@ -8,6 +8,7 @@
 #include "prompt.h"
 #include "flag_db.h"
 #include "hover_box.h"
+#include "autocomplete.h"
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -421,6 +422,14 @@ static void repaint_line(zbash_state_t *state, const char *line_buf, size_t line
         free(highlighted);
     }
 
+    /* Render Inline Ghost Text (Titanium Gray) if cursor is at end of line */
+    if (cursor_pos == line_len && line_len > 0) {
+        zbash_candidate_t ghost;
+        if (zbash_find_inline_ghost(state, line_buf, line_len, cursor_pos, &ghost)) {
+            printf("\033[38;5;242m%s\033[0m", ghost.display_suffix);
+        }
+    }
+
     /* Clear any remaining characters to right */
     printf("\033[K");
 
@@ -541,9 +550,22 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
             continue;
         }
 
-        /* Ctrl-E: End of line */
-        if (c == 5) {
-            cursor_pos = line_len;
+        /* Ctrl-E / Ctrl-F: End of line or accept ghost text */
+        if (c == 5 || c == 6) {
+            if (cursor_pos == line_len) {
+                zbash_candidate_t ghost;
+                if (zbash_find_inline_ghost(state, line_buf, line_len, cursor_pos, &ghost)) {
+                    size_t slen = strlen(ghost.display_suffix);
+                    if (line_len + slen < sizeof(line_buf) - 1) {
+                        memcpy(line_buf + line_len, ghost.display_suffix, slen);
+                        line_len += slen;
+                        cursor_pos = line_len;
+                        line_buf[line_len] = '\0';
+                    }
+                }
+            } else {
+                cursor_pos = line_len;
+            }
             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
             continue;
         }
@@ -586,9 +608,9 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
             continue;
         }
 
-        /* Tab key (Monaco Hover Help / Completion) */
+        /* Tab key (Monaco Visual Mini-Palette Menu & Autocomplete) */
         if (c == '\t') {
-            zbash_show_hover_help(line_buf, line_len, cursor_pos);
+            zbash_show_completion_menu(state, line_buf, &line_len, &cursor_pos, prompt_prefix_len);
             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
             continue;
         }
@@ -626,6 +648,19 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
                         if (cursor_pos < line_len) {
                             cursor_pos++;
                             repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+                        } else if (cursor_pos == line_len) {
+                            /* Accept inline ghost text */
+                            zbash_candidate_t ghost;
+                            if (zbash_find_inline_ghost(state, line_buf, line_len, cursor_pos, &ghost)) {
+                                size_t slen = strlen(ghost.display_suffix);
+                                if (line_len + slen < sizeof(line_buf) - 1) {
+                                    memcpy(line_buf + line_len, ghost.display_suffix, slen);
+                                    line_len += slen;
+                                    cursor_pos = line_len;
+                                    line_buf[line_len] = '\0';
+                                    repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
+                                }
+                            }
                         }
                         break;
                     case 'A': /* Up Arrow (History Back) */
@@ -674,7 +709,21 @@ char *zbash_read_line_highlighted(zbash_state_t *state) {
                         repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                         break;
                     case 'F': /* End */
-                        cursor_pos = line_len;
+                        if (cursor_pos == line_len) {
+                            /* Accept inline ghost text on End */
+                            zbash_candidate_t ghost;
+                            if (zbash_find_inline_ghost(state, line_buf, line_len, cursor_pos, &ghost)) {
+                                size_t slen = strlen(ghost.display_suffix);
+                                if (line_len + slen < sizeof(line_buf) - 1) {
+                                    memcpy(line_buf + line_len, ghost.display_suffix, slen);
+                                    line_len += slen;
+                                    cursor_pos = line_len;
+                                    line_buf[line_len] = '\0';
+                                }
+                            }
+                        } else {
+                            cursor_pos = line_len;
+                        }
                         repaint_line(state, line_buf, line_len, cursor_pos, prompt_prefix_len);
                         break;
                     case '3': /* Delete key \033[3~ */

@@ -45,7 +45,8 @@ SRCS = src/main.c src/core/engine.c src/core/prompt.c src/core/variables.c src/c
        src/builtins/builtin_jobs.c \
        src/interactive/highlight.c \
        src/interactive/flag_db.c \
-       src/interactive/hover_box.c
+       src/interactive/hover_box.c \
+       src/interactive/autocomplete.c
 OBJS = $(SRCS:.c=.o)
 
 ifeq ($(UNAME_M),arm64)
@@ -79,6 +80,7 @@ test: $(BIN_DIR)/zbash
 	@bash test/test_highlight.sh
 	@bash test/test_flag_ribbon.sh
 	@bash test/test_hover_box.sh
+	@bash test/test_autocomplete.sh
 
 arena: $(BIN_DIR)/zbash
 	@bash arena/arena_zbash.sh
