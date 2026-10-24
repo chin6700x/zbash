@@ -43,3 +43,5 @@ Library Sourcing: source file.sh และ . file.sh
 Arithmetic: (( x += 10 )), $(( a + b ))
 Control Flow: break, continue, return, exit
 ในมิตินี้ zbash สามารถใช้เป็น Drop-in Replacement สำหรับรันสคริปต์ระบบทั่วไปแทน Bash ได้ 100% ครับ
+
+test to  copy  xampp help me  to grep is now how

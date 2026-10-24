@@ -1,6 +1,9 @@
 #!/bin/bash
 # ==============================================================================
 # ADVANCE TEST SUITE - MODULE 08: STRING ALGORITHMS & TEXT PARSING
+# Author: Wirot Chookeaw (chin6700x)
+# Copyright: (c) 2026 Wirot Chookeaw.
+# License: Apache License 2.0
 # ==============================================================================
 # Comprehensive 100-test differential verification for developer and analyst
 # workflows: Path canonicalization, URL slugify, case conversions (camel/snake/kebab),

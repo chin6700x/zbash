@@ -1,6 +1,9 @@
 #!/bin/bash
 # ==============================================================================
 # ADVANCE TEST SUITE - MODULE 09: PROCESS SUPERVISION & SIGNAL TRAPS
+# Author: Wirot Chookeaw (chin6700x)
+# Copyright: (c) 2026 Wirot Chookeaw.
+# License: Apache License 2.0
 # ==============================================================================
 # Comprehensive 100-test differential verification for developer and analyst
 # workflows: Signal trapping, subshell isolation, exit code propagation,

@@ -1,171 +1,366 @@
-# ⚡ ZBASH: Bare-Metal POSIX/Bash Shell Engine
+# zbash
 
-> **"Sub-Millisecond Startup · Cleanroom First-Principles ISO C11 · ARM64 NEON Vector Accelerated · 100% Darwin Drop-in Parity"**  
-> **Author & Architect:** [Wirot Chookeaw (chin6700x)](https://github.com/chin6700x) | **License:** [Apache License 2.0](LICENSE) &copy; 2026  
-
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Platform: macOS Darwin](https://img.shields.io/badge/Platform-macOS%20Darwin%20(Apple%20Silicon)-orange.svg)]()
-[![WebAssembly Target](https://img.shields.io/badge/Target-WebAssembly%20(WASM)-purple.svg)]()
-[![Parity Tests](https://img.shields.io/badge/Parity%20Tests-1%2C000%20%2F%201%2C000%20(100%25%20PASS)-brightgreen.svg)]()
-[![Binary Size](https://img.shields.io/badge/Binary%20Size-86%20KB%20(Zero%20Bloat)-emerald.svg)]()
-[![Throughput](https://img.shields.io/badge/Throughput-35%2B%20GB%2Fs%20NEON%20SIMD-cyan.svg)]()
+A high-performance command language interpreter and interactive shell engineered from first principles in ISO C11 and native ARM64 NEON assembly.
 
 ---
 
-## 🧭 ZBASH คืออะไร และมีไว้ทำไม? (What is ZBASH & Why Does It Exist?)
+## 1. Design Philosophy and Purpose
 
-**`zbash`** คือชุดคำสั่ง Shell ยุคใหม่ระดับ Bare-Metal ที่ถูกพัฒนาขึ้นใหม่ทั้งหมดจากศูนย์ (Cleanroom First-Principles Architecture) โดยใช้ภาษา ISO C11 ร่วมกับ Hand-Crafted ARM64 NEON Vector Assembly เพื่อเป็น **Drop-in Replacement ของ Bash และ POSIX Shell** สำหรับ macOS (Apple Silicon) และสภาพแวดล้อม WebAssembly ยุคใหม่
+zbash was created to rethink the command-line execution layer from the silicon up, focusing on speed, minimal memory footprint, and modern developer ergonomics without carrying legacy overhead.
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        ZBASH EXECUTION ENGINE                          │
-│               Cleanroom C11 + 128-bit ARM64 NEON Vector                │
-└───────────────────┬────────────────────────────────┬───────────────────┘
-                    │                                │
-                    ▼                                ▼
-┌──────────────────────────────────────┐  ┌──────────────────────────────────────┐
-│     TARGET 1: NATIVE MACOS DARWIN    │  │       TARGET 2: WEBASSEMBLY (WASM)   │
-│     (Bare-Metal Silicon Shell Core)  │  │        (In-Browser OS & Cloud Tab)   │
-├──────────────────────────────────────┤  ├──────────────────────────────────────┤
-│ • 86 KB Ultra-Compact Mach-O Binary  │  │ • 77 KB Lightweight WebAssembly Core │
-│ • 0.4 ms Cold-Spawn Latency          │  │ • In-Memory Browser POSIX AST Engine │
-│ • 1,000 / 1,000 Bit-Exact Bash Parity│  │ • Dual-Engine Hybrid Cloud Gateway   │
-│ • Powers ZephyrTerm GPU Metal Canvas │  │ • WebOS Terminal & Interactive Shell │
-└──────────────────────────────────────┘  └──────────────────────────────────────┘
-```
+### Core Objectives
 
-### 🛑 1. ปมปัญหาประวัติศาสตร์บน macOS (The Historical macOS Dilemma)
-1. **กำแพงลิขสิทธิ์ GNU GPLv3:**  
-   GNU Bash ได้เปลี่ยนสัญญาอนุญาตเป็น **GPLv3** ตั้งแต่เวอร์ชัน 4.0 (ปี 2009) ซึ่งมีข้อกำหนดเข้มงวดเรื่อง Anti-Tivoization และสิทธิบัตร Apple จึงไม่อนุญาตให้ใช้ GPLv3 ในระบบปฏิบัติการ ส่งผลให้ macOS ต้อง**แช่แข็ง Bash อยู่ที่เวอร์ชัน 3.2.57 (GPLv2 ปี 2007) นานกว่า 15 ปี!**
-2. **ปัญหาความไม่เข้ากันของ Zsh กับสคริปต์โลก:**  
-   ใน macOS Catalina (2019) Apple แก้ปัญหาโดยเปลี่ยน Default Interactive Shell เป็น Zsh แต่ **99.9% ของสคริปต์ระบบ, CI/CD pipelines, Dockerfiles, Homebrew build scripts, และงาน DevOps สากลล้วนเขียนขึ้นบนมาตรฐาน Bash/POSIX (`#!/bin/bash` หรือ `#!/bin/sh`)**
-   * Zsh มีไวยากรณ์ที่ขัดแย้งกับ Bash เช่น Array Indexing เริ่มที่ 1 (แทนที่จะเป็น 0), ไม่ตัดคำตัวแปร (No Word Splitting) โดยดีฟอลต์, และแพทเทิร์นที่ต่างกัน ทำให้สคริปต์เดิมนำมารันบน Zsh ตรงๆ แล้วพังทันที
-
-### 🎯 2. บทบาทและหน้าที่หลักของ ZBASH (Core Purposes)
-`zbash` ถูกสร้างขึ้นมาเพื่อแก้ปัญหาเหล่านี้โดยเฉพาะ:
-* 🏆 **100% True Drop-in Darwin Replacement:** รันสคริปต์ Bash และ POSIX เดิมได้ทันที 100% โดยไม่ต้องแก้โค้ดแม้แต่บรรทัดเดียว ให้ผลลัพธ์ STDOUT, STDERR และ Exit Code (`$?`) ตรงกันระดับ **Bit-for-Bit Exact Match**
-* ⚡ **Bare-Metal Apple Silicon Acceleration:** ใช้ประโยชน์จาก ARM64 NEON Vector Registers (128-bit SIMD) ในการสแกน Token และข้าม Whitespace ด้วยความเร็วบัสหน่วยความจำระดับ 35+ GB/s สตาร์ทภายใน **0.4 ms** (เร็วกว่า GNU Bash ถึง 8 เท่า)
-* 🪶 **Zero External Bloat (86 KB vs 1.9 MB):** ขนาดไฟล์เล็กกว่า GNU Bash ถึง **22 เท่า** และใช้ RAM เริ่มต้นเพียง **0.4 MB** (ประหยัด RAM กว่า 6–9 เท่า) โดยพึ่งพาเพียง `libSystem.B` เท่านั้น ไร้ภาระ Ncurses หรือไลบรารีภายนอก
-* 🖥️ **Execution Backbone สำหรับ Zephyr Ecosystem & ZephyrTerm:** เป็นหัวใจหลักในการประมวลผลคำสั่งเบื้องหลังให้กับ **ZephyrTerm** (GPU Metal Terminal Emulator) และประสานงานร่วมกับชุดเครื่องมือ Bare-metal ทั้ง 44 ตัวใน Zephyr Ecosystem
-* 🌐 **Dual Target (Mach-O + WebAssembly):** สามารถคอมไพล์เป็น `zbash.wasm` (~77 KB) เพื่อนำ Shell ไปรันบนเบราว์เซอร์ได้โดยตรง พร้อมระบบเชื่อมต่อ Cloud Gateway ไปยัง Virtual Machine
-* 📜 **Cleanroom ISO C11 ภายใต้ Apache License 2.0:** พัฒนาขึ้นใหม่ทั้งหมดโดยไม่คัดลอกโค้ด GPL เดิม ทำให้ปลอดภัย 100% สำหรับการใช้งานในเชิงพาณิชย์และระดับองค์กร
+- **Sub-Millisecond Cold-Spawn Latency:** Initializes and executes in under 0.5 ms, making it ideal for high-throughput scripting, process automation, and instant terminal launches.
+- **Hardware-Vectorized Lexing:** Features an ARM64 NEON assembly engine (`simd_lexer.s`) that scans tokens and skips delimiters 16 bytes per clock cycle using 128-bit vector registers (`q0-q5`, `v16-v23`), sustaining 35+ GB/s bus throughput.
+- **Ultra-Compact Footprint:** Compiled to a self-contained ~70 KB native binary designed to fit entirely within CPU L2 cache, eliminating cache thrashing. Initial runtime resident memory is under 0.5 MB.
+- **Zero External Dependencies:** Built purely on ISO C11 and standard system primitives, eliminating reliance on external terminal libraries, heavy runtimes, or vintage compatibility layers.
+- **Zero-Copy Pipeline Streaming:** Implements a direct descriptor handoff mechanism that reduces kernel context switching overhead across multi-stage execution pipelines.
+- **First-Class Interactive Ergonomics:** Integrates native syntax highlighting, parameter hover ribbons, real-time repository inspection, and an embedded modal visual editor (`zedit`) directly into the core binary.
+- **Dual-Target Silicon Architecture:** Compiles natively to Apple Silicon Darwin Mach-O as well as WebAssembly (`zbash.wasm`), enabling in-browser terminal execution and cloud micro-sandboxes.
 
 ---
 
-## 📊 ตารางเปรียบเทียบเชิงประจักษ์ (Empirical Benchmark Matrix)
+## 2. Building and Installation
 
-การทดสอบวัดผลจริงบนเครื่อง Apple Silicon (macOS Darwin ARM64):
+### Prerequisites
 
-| มิติการเปรียบเทียบ | macOS BSD `/bin/bash` (3.2.57) | macOS `/bin/zsh` (5.9) | **Zephyr `zbash` (2026 Engine)** | ผลลัพธ์เชิงประจักษ์ / ข้อได้เปรียบ |
-| :--- | :---: | :---: | :---: | :--- |
-| **ขนาดไบนารี (Binary Size)** | 1.9 MB (1,920 KB) | 2.0 MB (2,050 KB) | **86 KB** (86 KB) | ⚡ **`zbash` เล็กกว่า 22x - 24x** (ลดขนาด 95.5%) |
-| **การพึ่งพาไลบรารี (Shared Libs)** | `ncurses`, `libSystem` | `pcre`, `iconv`, `ncurses`, `libSystem` | **`libSystem.B` เท่านั้น** | 🛡️ **Zero External Dependencies** |
-| **ความเร็วบูตเครื่อง (Spawn Latency)** | ~3.20 ms | ~2.87 ms | **~0.40 ms** | 🚀 **`zbash` สตาร์ทเร็วกว่า 7x - 8x** |
-| **หน่วยความจำเริ่มต้น (Cold RSS)** | ~2.4 MB | ~3.8 MB | **~0.4 MB** | 🧠 **ประหยัด RAM กว่า 6x - 9x** |
-| **ตัวแยกคำ (Lexer Engine)** | Scalar Byte Loop | Scalar Byte Loop | **ARM64 NEON Vector (128-bit)** | ⚡ สแกนคำระดับ Hardware Throughput |
-| **ความเร็วประมวลผลลูป (50k Iter)** | 0.0716 วินาที | 0.0386 วินาที | **0.0355 วินาที** | ⚡ **`zbash` เร็วกว่า Bash 2.02x** |
-| **คณิตศาสตร์สะสมค่า (Sum 1..30k)** | 0.0714 วินาที | 0.0391 วินาที | **0.0167 วินาที** | ⚡ **`zbash` เร็วกว่า Bash 4.28x** |
-| **WebAssembly Target (WASM)** | ❌ ทำไม่ได้ (GPL/Kernel tied) | ❌ ทำไม่ได้ง่าย (Kernel tied) | **✅ Native Support (~77 KB)** | 🌐 รันในเบราว์เซอร์ได้ทันที |
-| **สัญญาอนุญาต (License)** | GNU GPLv2 (Frozen 2007) | Zsh Custom (MIT/BSD-like) | **Apache License 2.0** | ⚖️ สากล ปลอดภัยต่อองค์กร |
+- macOS on Apple Silicon (ARM64) or Linux POSIX environment
+- C Compiler supporting ISO C11 (Clang or GCC)
+- GNU Make
 
----
+### Build from Source
 
-## 🛠️ จุดเด่นด้านฟีเจอร์และสถาปัตยกรรม (Core Features)
-
-- **Sub-Millisecond Cold Boot:** เริ่มต้นทำงานได้ในเสี้ยววินาที (~0.4 ms) ไร้ภาระ Heap Churn เหมาะสำหรับ MicroVMs, Serverless, Containers และระบบฝังตัว
-- **ARM64 NEON Vector Lexer:** โค้ด Pure Assembly (`src/asm/simd_lexer.s`) โหลด 16 ไบต์ต่อรอบด้วยรีจิสเตอร์ `v0`-`v3` เพื่อสแกน Whitespace และแยก Token ที่ความเร็วระดับฮาร์ดแวร์
-- **Full POSIX Pipelines & I/O Redirections:** รองรับ Anonymous Pipes (`|`), การเขียนทับ (`>`), การต่อท้าย (`>>`), การอ่านไฟล์ (`<`), และการจัดการ File Descriptors (`2>`, `2>&1`, `&>`)
-- **Control Flow & Scripting AST:** รองรับโครงสร้างควบคุมครบถ้วน: `for/in/do/done`, `while/do/done`, `until/do/done`, `if/then/elif/else/fi`, `break`, `continue`, ฟังก์ชัน `func() {}`, และนิพจน์คณิตศาสตร์ `(( ... ))`
-- **Advanced Parameter & Array Engine:** รองรับอาร์เรย์แบบ Bash `arr=( ... )`, การกระจายอาร์เรย์ `${arr[@]}`, การสไลซ์ `${arr[@]:start:len}`, ขนาดอาร์เรย์ `${#arr[@]}`, และพารามิเตอร์ตำแหน่ง `"$@"`
-- **In-Process Builtin Suite:** บิลต์อินความเร็วสูงในตัว: `cd`, `pwd`, `echo`, `export`, `unset`, `test`/`[`, `true`, `false`, `type`, `shift`, `read`, `exit`, `exec`, `eval`, `local`, `return`, `trap`, `source`, `.`, `history`, `jobs`, `kill`
-- **Full Unicode & Multi-Byte Support:** รองรับอักขระภาษาไทย, Emojis และ UTF-8 ในสตริง ตัวแปร พารามิเตอร์ และชื่อฟังก์ชันอย่างสมบูรณ์แบบ
-- **Exact Exit Code Parity:** ส่งต่อรหัสสถานะความผิดพลาด (`$?`) ตรงตามมาตรฐาน POSIX และ Darwin บิตต่อบิต
-
----
-
-## 🧪 การพิสูจน์ความถูกต้องสมบูรณ์แบบ (1,000 Differential Parity Proof)
-
-`zbash` ผ่านชุดทดสอบจับคู่จริงเทียบกับ macOS `/bin/bash` ครบทั้ง 10 หมวดหมู่ รวม **1,000 กรณีทดสอบแบบอัตโนมัติ (100.0% PASS)**:
-
-| หมวดหมู่การทดสอบ | รายละเอียดโมดูล | จำนวนข้อ | สถานะการทดสอบ |
-| :--- | :--- | :---: | :---: |
-| `test_01_builtins_core.sh` | Core Builtins & Basic Commands (`cd`, `pwd`, `echo`, `export`...) | 100 / 100 | **PASS 🏆** |
-| `test_02_arithmetic_compound.sh` | Compound Math & Arithmetic Expressions `(( ... ))` | 100 / 100 | **PASS 🏆** |
-| `test_03_variables_expansion.sh` | Variable Expansions & Parameter Math `${var#...}` | 100 / 100 | **PASS 🏆** |
-| `test_04_control_flow_loops.sh` | Loops & Control Flow (`for`, `while`, `until`, `break`) | 100 / 100 | **PASS 🏆** |
-| `test_05_conditionals_test.sh` | Conditionals & POSIX Test Operators `[ ... ]` | 100 / 100 | **PASS 🏆** |
-| `test_06_functions_scope.sh` | Functions, Local Scope, Return & Call Stack | 100 / 100 | **PASS 🏆** |
-| `test_07_pipelines_redirections.sh` | Multi-Stage Pipelines, Redirections & Here-Strings | 100 / 100 | **PASS 🏆** |
-| `test_08_subshells_grouping.sh` | Subshells `( ... )` & Command Grouping `{ ... }` | 100 / 100 | **PASS 🏆** |
-| `test_09_arrays_quoting.sh` | Arrays, Slicing & Advanced Quoting Mechanics | 100 / 100 | **PASS 🏆** |
-| `test_10_edge_cases_stress.sh` | Edge Cases, Unicode/ภาษาไทย, Recursion & Stress | 100 / 100 | **PASS 🏆** |
-| **GRAND TOTAL** | **Complete Differential Parity Verification** | **1,000 / 1,000** | **100.0% PASS 💎** |
-
----
-
-## 🚀 เริ่มต้นใช้งาน (Quick Start)
-
-### 1. คอมไพล์ Native Mach-O Binary:
-```bash
-make clean && make
-```
-ไบนารีขนาด 86 KB จะถูกสร้างขึ้นที่ `bin/zbash`
-
-### 2. รัน Interactive Shell:
-```bash
-./bin/zbash
+```sh
+git clone https://github.com/chin6700x/zbash.git
+cd zbash
+make
 ```
 
-### 3. รันสคริปต์อัตโนมัติ:
-```bash
-./bin/zbash path/to/script.sh
+The compiled binary will be placed at `bin/zbash`.
+
+### Running Tests
+
+Execute the comprehensive test suite (including syntax verification, UX tests, editor checks, and parser validations):
+
+```sh
+make test
 ```
 
-### 4. รันชุดทดสอบ Parity:
-```bash
-# รันชุดทดสอบ Self-Hosted Test Suite
-./bin/zbash test/test_zbash.sh
+### Installation
 
-# รันชุดทดสอบ Advance Differential Test Suite
-bash test/advance-test/run_advance_differential.sh
+To install `zbash` system-wide into `/usr/local/bin`:
+
+```sh
+sudo cp bin/zbash /usr/local/bin/zbash
+sudo chmod 755 /usr/local/bin/zbash
 ```
 
 ---
 
-## 🌐 WebAssembly In-Browser OS & Cloud Gateway (`zbash.wasm`)
+## 3. Invocation and Command-Line Options
 
-`zbash` สามารถคอมไพล์เป็น WebAssembly ขนาดเพียง **~77 KB** เพื่อนำไปรันบนเว็บเบราว์เซอร์ได้ทันทีโดยไม่ต้องพึ่งพา Linux VM หรือคอนเทนเนอร์:
+zbash accepts standard invocation flags for both interactive sessions and automated scripting:
 
-### 🌟 คุณสมบัติบนเว็บ:
-- **Zero-Latency In-Browser Shell:** ประมวลผลลูป ฟังก์ชัน และคณิตศาสตร์ในหน่วยความจำเบราว์เซอร์ (< 0.1 ms)
-- **Dual-Engine Hybrid Cloud Gateway:** สลับการรันคำสั่งระหว่าง In-Browser WASM กับ Cloud VM (`oxdb-production`) ผ่านคำสั่ง `@cloud <command>`
-- **Luxury Web Terminal UI:** ดีไซน์ Dark Glassmorphism, ฟอนต์ Outfit + JetBrains Mono, พร้อม Real-time Metrics Badges
+```text
+zbash [-exnvi] [-c string | script_file [arguments...]]
+```
 
-### การสร้างและรัน WebAssembly:
-```bash
-# 1. คอมไพล์ zbash เป็น WebAssembly
-make -C wasm
+| Option | Description |
+|---|---|
+| `-c string` | Read and execute commands directly from the specified string. Remaining arguments are assigned to positional parameters (`$1`, `$2`, ...). |
+| `-i` | Force interactive shell mode, enabling line editing, prompt rendering, and history. |
+| `-s` | Read commands sequentially from standard input. |
+| `-e` | Exit immediately if a command or pipeline exits with a non-zero status (`errexit`). |
+| `-x` | Print commands and their expanded arguments to stderr before execution (`xtrace`). |
+| `-n` | Read commands and check for syntax errors without executing them (`noexec`). |
+| `-v` | Print shell input lines as they are read (`verbose`). |
+| `-r` | Run in restricted shell mode (locks down `$PATH`, `$SHELL`, and directory traversal). |
+| `--norc` | Do not load startup configuration files (`~/.zbashrc`). |
+| `--noprofile` | Do not load login profile scripts (`/etc/zprofile`, `~/.zprofile`). |
+| `--help` | Display command-line option summary and exit. |
+| `--version` | Display version, target architecture, and license information. |
 
-# 2. เปิด Local Web Server
-python3 -m http.server 8085 --directory wasm/web
+---
 
-# 3. เปิดในเบราว์เซอร์ที่:
-# http://localhost:8085
+## 4. Usage Guide
+
+### 4.1 Running Scripts
+
+#### Direct Script Execution
+Pass the path to any script file as the first argument:
+
+```sh
+zbash deploy.sh production
+```
+
+#### Shebang Support
+Set `zbash` in your script's shebang header:
+
+```sh
+#!/usr/local/bin/zbash
+set -e
+
+echo "Starting automated task..."
+for item in alpha beta gamma; do
+    echo "Processing: ${item}"
+done
+```
+
+Make the script executable and run it directly:
+
+```sh
+chmod +x deploy.sh
+./deploy.sh
+```
+
+#### Inline Commands
+Execute command strings without creating a file:
+
+```sh
+zbash -c 'for i in 1 2 3; do echo "Count: $i"; done'
 ```
 
 ---
 
-## 📜 สัญญาอนุญาต (License)
+### 4.2 Interactive Environment
 
-โปรเจกต์นี้เผยแพร่ภายใต้สัญญาอนุญาต **Apache License 2.0**  
-ดูรายละเอียดเพิ่มเติมได้ที่ไฟล์ [LICENSE](LICENSE)
+When launched without arguments in a terminal, `zbash` opens in interactive mode:
 
+```sh
+zbash
 ```
-Copyright 2026 Wirot Chookeaw (chin6700x)
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+#### Two-Line Structured Prompt
+The prompt organizes context and input into a clean visual hierarchy:
 
-    http://www.apache.org/licenses/LICENSE-2.0
+```text
+╭─ zbash in ~/projects/engine on git:(main)*
+╰─❯ 
 ```
+
+- **Top Line (Context Bar):** Displays the active shell, working directory (abbreviated with `~`), and current source repository branch status.
+- **Bottom Line (Input Line):** Highlights command input with real-time syntax coloring, displaying the exit code indicator when a previous command fails.
+
+#### Interactive Features
+- **Real-Time Syntax Highlighting:** Valid commands appear highlighted, while unknown commands or syntax errors are indicated before execution.
+- **Context-Aware Completion:** Press `Tab` to complete filenames, paths, built-in commands, and environment variables.
+- **Flag Documentation Ribbons:** When typing common command-line flags (e.g., `-l`, `-v`), contextual help ribbons display flag definitions above the cursor.
+- **Persistent History:** Commands are recorded in `~/.zbash_history` and synchronized across sessions.
+- **Embedded Editor (`zedit`):** Launch a lightweight, built-in visual modal editor directly from the command line without leaving the shell:
+
+```sh
+zedit config.txt
+```
+
+---
+
+### 4.3 Scripting Language Reference
+
+#### Variables and Parameter Expansion
+```sh
+# Variable assignment
+NAME="Orion"
+PORT=8080
+
+# Basic expansion
+echo "Service ${NAME} listening on port ${PORT}"
+
+# Positional and special variables
+echo "Script name: $0"
+echo "First argument: $1"
+echo "All arguments: $@"
+echo "Argument count: $#"
+echo "Process PID: $$"
+echo "Last exit status: $?"
+
+# Default value assignment
+echo "${TIMEOUT:-30}"
+```
+
+#### Arrays and Slicing
+```sh
+# Array declaration
+modules=(core parser engine codegen)
+
+# Accessing elements
+echo "First module: ${modules[0]}"
+echo "All modules: ${modules[@]}"
+echo "Element count: ${#modules[@]}"
+
+# Slicing (offset:length)
+echo "Slice: ${modules[@]:1:2}"
+```
+
+#### Pipelines and Redirection
+```sh
+# Multi-stage pipelines
+cat access.log | grep "ERROR" | cut -d' ' -f5 | sort | uniq -c
+
+# Output redirection (overwrite and append)
+echo "Init" > run.log
+echo "Step 1" >> run.log
+
+# Error redirection
+command_that_might_fail 2> error.log
+command_with_combined_output > all.log 2>&1
+
+# Input redirection
+while read line; do
+    echo "Line: ${line}"
+done < input.txt
+```
+
+#### Control Flow Structures
+
+**Conditionals (`if` / `elif` / `else`):**
+```sh
+if [ -f "/etc/config.json" ]; then
+    echo "Configuration exists"
+elif [ -d "/etc/config.d" ]; then
+    echo "Configuration directory exists"
+else
+    echo "No configuration found"
+fi
+```
+
+**Loops (`for`, `while`, `until`):**
+```sh
+# Iterate over word lists
+for target in arm64 x86_64 wasm; do
+    echo "Compiling for ${target}"
+done
+
+# While loop with condition
+COUNT=5
+while [ $COUNT -gt 0 ]; do
+    echo "Countdown: $COUNT"
+    COUNT=$((COUNT - 1))
+done
+
+# Infinite loop with break
+while true; do
+    read -p "Enter command (q to quit): " user_input
+    if [ "$user_input" = "q" ]; then
+        break
+    fi
+done
+```
+
+**Branch Logic:**
+```sh
+make build && echo "Build succeeded" || echo "Build failed"
+```
+
+#### Arithmetic Expressions
+```sh
+# In-place arithmetic evaluation
+(( count = 10 ))
+(( count += 5 ))
+
+# Inline arithmetic expansion
+TOTAL=$(( 100 * 4 + 25 ))
+echo "Result: $TOTAL"
+```
+
+#### Functions and Scoping
+```sh
+calculate_checksum() {
+    local filepath="$1"
+    if [ ! -f "$filepath" ]; then
+        echo "File not found" >&2
+        return 1
+    fi
+    shasum -a 256 "$filepath"
+}
+
+calculate_checksum "bin/zbash"
+```
+
+#### Signal Traps and Cleanup
+```sh
+cleanup() {
+    echo "Cleaning temporary files..."
+    rm -f /tmp/work_*.tmp
+}
+
+trap cleanup EXIT INT TERM
+```
+
+---
+
+## 5. Built-in Commands Reference
+
+zbash provides high-speed, in-process implementations of essential system built-ins:
+
+| Builtin | Syntax | Description |
+|---|---|---|
+| `cd` | `cd [dir]` | Change current working directory. Supports `cd -` for previous directory. |
+| `pwd` | `pwd [-L \| -P]` | Print the absolute path of the current working directory. |
+| `echo` | `echo [-n] [args...]` | Print arguments separated by spaces, followed by a newline. |
+| `printf` | `printf format [args...]` | Format and print data according to format string. |
+| `export` | `export [name[=val]...]` | Mark variables for export to child environments. |
+| `unset` | `unset [-v] [name...]` | Remove variable or function definitions. |
+| `declare` | `declare [-r \| -i \| -x] [name=val]` | Declare variables with specific attributes (read-only, integer, export). |
+| `test` / `[` | `[ expr ]` | Evaluate conditional expression (file tests, string comparisons, integers). |
+| `read` | `read [-r] [-p prompt] [var...]` | Read a line of input from standard input into variables. |
+| `exit` | `exit [code]` | Terminate the shell process with the specified exit code. |
+| `exec` | `exec command [args...]` | Replace the shell process image with the target command. |
+| `eval` | `eval [args...]` | Concatenate arguments and execute the result as shell commands. |
+| `source` / `.` | `source file [args...]` | Execute commands from a file within the current shell environment. |
+| `pushd` | `pushd [dir]` | Push directory onto directory stack and change directory. |
+| `popd` | `popd` | Pop directory from directory stack and change directory. |
+| `dirs` | `dirs [-v]` | Display directory stack. |
+| `history` | `history [-c]` | Display command history or clear history entries. |
+| `jobs` | `jobs` | List active background jobs and process IDs. |
+| `fg` | `fg [job_id]` | Bring background job to foreground. |
+| `bg` | `bg [job_id]` | Resume suspended job in background. |
+| `trap` | `trap [action] [signal...]` | Register command handler for system signals and lifecycle events. |
+| `caller` | `caller [depth]` | Inspect function call frame and stack trace. |
+| `zedit` | `zedit [file]` | Launch the built-in modal terminal editor. |
+
+---
+
+## 6. Startup Files and Configuration
+
+During initialization, `zbash` searches for configuration files in the following sequence:
+
+1. `/etc/zprofile` - System-wide configuration evaluated for login sessions.
+2. `~/.zprofile` - User configuration evaluated for login sessions.
+3. `~/.zbashrc` - User configuration evaluated for all interactive sessions. Recommended for custom environment variables, aliases, and functions.
+4. `~/.zbash_history` - Stores interactive command history.
+
+Example `~/.zbashrc`:
+
+```sh
+# Environment paths
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+export EDITOR="zedit"
+
+# Aliases
+alias ll="ls -la"
+alias g="git"
+
+# Custom utility function
+mkcd() {
+    mkdir -p "$1" && cd "$1"
+}
+```
+
+---
+
+## 7. WebAssembly Target
+
+zbash can be compiled to WebAssembly for execution in browser environments, Node.js, and serverless WASM runtimes:
+
+```sh
+# Compile to WebAssembly core
+emcc -O3 -DZBASH_WASM -Iinclude src/core/*.c src/parser/*.c src/builtins/*.c -o bin/zbash.wasm
+```
+
+The compiled WASM module provides an in-memory command parser and execution core that operates sandbox-isolated.
+
+---
+
+## 8. License
+
+zbash is released under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for complete licensing terms.

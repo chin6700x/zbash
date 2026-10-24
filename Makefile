@@ -43,10 +43,17 @@ SRCS = src/main.c src/core/engine.c src/core/prompt.c src/core/variables.c src/c
        src/builtins/builtin_caller.c \
        src/builtins/builtin_history.c \
        src/builtins/builtin_jobs.c \
+       src/builtins/builtin_zedit.c \
        src/interactive/highlight.c \
        src/interactive/flag_db.c \
        src/interactive/hover_box.c \
-       src/interactive/autocomplete.c
+       src/interactive/autocomplete.c \
+       src/editor/zedit_buffer.c \
+       src/editor/zedit_viewport.c \
+       src/editor/zedit_syntax.c \
+       src/editor/zedit_actions.c \
+       src/editor/zedit_core.c \
+       src/editor/zedit_env.c
 OBJS = $(SRCS:.c=.o)
 
 ifeq ($(UNAME_M),arm64)
@@ -81,6 +88,7 @@ test: $(BIN_DIR)/zbash
 	@bash test/test_flag_ribbon.sh
 	@bash test/test_hover_box.sh
 	@bash test/test_autocomplete.sh
+	@bash test/test_zedit.sh
 
 arena: $(BIN_DIR)/zbash
 	@bash arena/arena_zbash.sh

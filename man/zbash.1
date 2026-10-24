@@ -231,6 +231,46 @@ Enabled via
 .Ic set -o vi
 for modal command and insert editing.
 .El
+.Sh IN-SHELL DUAL-SURFACE EDITOR (ZEDIT)
+.Nm
+embeds an in-process, zero-spawn micro-IDE via the
+.Ic zedit
+builtin.
+Operating entirely within the shell binary,
+.Ic zedit
+eliminates subprocess overhead while offering full terminal multitasking:
+.Bl -bullet
+.It
+.Sy ANSI DECSTBM Dual-Surface Viewport:
+Partitions the terminal into an upper code editor viewport (with line numbering, status indicator, and interactive action buttons) and an active lower shell viewport, preserving full command line multitasking.
+.It
+.Sy C11 Gap Buffer Engine:
+Implements an O(1) in-memory gap buffer supporting rapid character insertion, deletion, and atomic temporary file replacement on disk.
+.It
+.Sy Native Language Syntax Highlighting:
+Automatically highlights source files according to language extension: C/C++ (.c, .h), Python (.py), Shell scripts (.sh, .bash), Markdown (.md), and JSON.
+.It
+.Sy SGR 1006 Mouse Protocol:
+Supports direct mouse clicks on header action buttons ([Save], [Save As], [Cancel], [Close]), clicking on text lines to position the cursor, and clicking across viewports to shift input focus.
+.It
+.Sy Viewport Keybindings:
+.Bl -tag -width "Ctrl-T"
+.It Ic Ctrl-T
+Toggles active input focus instantaneously between the Upper Editor and Lower Terminal viewports.
+.It Ic Ctrl-S
+Saves the active file buffer to disk atomically and clears dirty status.
+.It Ic F5
+Saves the file, shifts focus to the terminal, and executes the active file immediately.
+.It Ic Ctrl-Q
+Closes the editor and restores full-screen terminal scrolling margins.
+.El
+.It
+.Sy Desktop GUI Companion Fallback:
+When running inside a macOS desktop environment, invoking
+.Ic zedit -g
+or launching without arguments can smoothly delegate to the native WebKit companion window
+.Pq Pa zedit-ui .
+.El
 .Sh LIFECYCLE EVENT HOOKS
 .Nm
 features native lifecycle hook functions that allow users to intercept and execute custom code
@@ -460,6 +500,8 @@ Removes command aliases.
 Unsets shell variables or functions.
 .It Ic wait Op Ar pid | jobspec ...
 Waits for background processes or jobs to terminate and returns their exit code.
+.It Ic zedit Op Fl t | Fl g Op Fl h Op Ar filename
+Opens the integrated dual-surface terminal micro-IDE for file editing and execution.
 .El
 .Sh ENVIRONMENT
 .Bl -tag -width "ZBASH_CMD_DURATION"

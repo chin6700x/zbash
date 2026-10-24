@@ -65,6 +65,7 @@ int builtin_jobs(zbash_state_t *state, int argc, char **argv);
 int builtin_fg(zbash_state_t *state, int argc, char **argv);
 int builtin_bg(zbash_state_t *state, int argc, char **argv);
 int builtin_disown(zbash_state_t *state, int argc, char **argv);
+int builtin_zedit(zbash_state_t *state, int argc, char **argv);
 
 void zbash_print_func_def(const char *name, const char *raw_body);
 zbash_func_t *zbash_find_func(zbash_state_t *state, const char *name);

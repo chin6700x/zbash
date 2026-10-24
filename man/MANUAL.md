@@ -233,9 +233,80 @@ chpwd() {
 
 ---
 
-## 🔢 10. ตัวแปรและโครงสร้างข้อมูล (Variables & Data Structures)
+---
+
+## 📝 10. ไมโครเอดิเตอร์ในตัวเชลล์แบบ Dual-Surface (In-Shell Dual-Surface Editor: `zedit`)
+
+`zbash` บรรจุเครื่องมือแก้ไขข้อความและเขียนโค้ด (Micro-IDE) ทำงานภายในโปรเซสเดียวกันผ่านคำสั่งบิลต์อิน `zedit` โดย **ไม่ต้องสร้าง Subprocess** (Zero Fork/Exec Overhead):
+
+```text
+ 📄 script.sh ● [Unsaved]   [ 💾 Save ]   [ 📝 Save As ]   [ ↺ Cancel ]   [ ✖ Close ]  ● FOCUS: EDITOR (Ctrl-T: Switch Window)  Ln 3, Col 12
+  1 │ #!/usr/bin/env zbash
+  2 │ echo "Starting task..."
+  3 │ for i in 1 2 3; do
+  4 │     echo "Count: $i"
+  5 │ done
+───────────────────────────────── [ ⇕ Ctrl-T: สลับหน้าต่าง | F5: รัน | Ctrl-S: บันทึก | Ctrl-Q: ปิด ] ─────────────────────────────────
+╭─ zbash in ~/projects on git:(main)
+╰─❯ 
+```
+
+### 10.1 สถาปัตยกรรม ANSI DECSTBM Viewport
+เมื่อเรียกใช้งาน `zedit` เชลล์จะส่งรหัสควบคุม ANSI DECSTBM (Top/Bottom Margins) เพื่อแบ่งหน้าจอเทอร์มินัลออกเป็น 2 ส่วนอิสระ:
+* **Upper Editor Viewport (ครึ่งบน):** พื้นที่สำหรับแก้ไขไฟล์ พร้อมหมายเลขบรรทัดและแถบปุ่มคำสั่ง (Action Buttons)
+* **Lower Terminal Viewport (ครึ่งล่าง):** หน้าต่างเชลล์ปกติที่ยังคงรันคำสั่ง ไปป์ หรือสคริปต์ได้อย่างต่อเนื่องโดยหน้าจอไม่กวนกัน
+
+### 10.2 ขุมพลัง Gap Buffer Engine
+หน่วยความจำข้อความถูกจัดการด้วยโครงสร้าง **Gap Buffer C11** (`zedit_gap_buffer_t`) ช่วยให้การแทรก/ลบตัวอักษร ณ ตำแหน่งเคอร์เซอร์ทำงานได้ที่ความเร็ว $O(1)$ รองรับไฟล์ขนาดใหญ่ได้ลื่นไหล ไร้อาการกระตุก
+
+### 10.3 การเน้นสีไวยากรณ์ (Syntax Highlighting)
+วิเคราะห์และระบายสีโค้ดสดตามนามสกุลไฟล์:
+* **C / C++ (`.c`, `.h`, `.cpp`):** คำสำคัญ (`int`, `void`, `return`), พรีโพรเซสเซอร์ (`#include`), คอมเมนต์สีเทา
+* **Python (`.py`):** คำสำคัญ (`def`, `class`, `import`, `return`), ค่าคงที่บูลีน
+* **Shell (`.sh`, `.bash`, `.zsh`):** โครงสร้างควบคุม (`if`, `then`, `for`, `done`), ตัวแปรระบบ (`$VAR`)
+* **Markdown / JSON / Text:** จัดรูปแบบข้อความ หัวข้อ และสตริง
+
+### 10.4 การรองรับเมาส์และปุ่มแอ็กชัน (SGR 1006 Mouse Protocol)
+* **Action Buttons:** สามารถใช้เมาส์คลิกปุ่มบน Header ได้โดยตรง:
+  * `[ 💾 Save ]` — บันทึกไฟล์ทันที (Atomic Tempfile Rename)
+  * `[ 📝 Save As ]` — บันทึกเป็นไฟล์ใหม่
+  * `[ ↺ Cancel ]` — ยกเลิกการแก้ไขและคืนค่าเดิม
+  * `[ ✖ Close ]` — ปิดเอดิเตอร์และคืนพื้นที่เต็มหน้าจอให้แก่เชลล์
+* **Click to Position:** คลิกเมาส์บนบรรทัดโค้ดเพื่อเลื่อนเคอร์เซอร์ไปยังตำแหน่งนั้นทันที
+* **Click to Focus:** คลิกบนพื้นที่เอดิเตอร์เพื่อสลับโฟกัสมาพิมพ์โค้ด หรือคลิกบนพื้นที่เชลล์เพื่อสลับไปพิมพ์คำสั่ง
+
+### 10.5 ตารางปุ่มลัดแป้นพิมพ์ (Keyboard Shortcuts)
+| ปุ่มลัด | ผลลัพธ์การทำงาน |
+|:---|:---|
+| **`Ctrl-T`** | สลับโฟกัสระหว่าง Editor (ครึ่งบน) กับ Terminal (ครึ่งล่าง) ทันที |
+| **`Ctrl-S`** | บันทึกการเปลี่ยนแปลงลงไฟล์ (Save) และล้างสถานะ Dirty |
+| **`F5`** | บันทึกไฟล์ สลับโฟกัสลง Terminal และรันโปรแกรมทันที |
+| **`Ctrl-Q`** | ปิดเอดิเตอร์ คืนค่า Scrolling Margins เต็มหน้าจอ |
+| **`ลูกศร ↑ ↓ ← →`** | เลื่อนเคอร์เซอร์บนล่างซ้ายขวา |
+| **`PageUp / PageDn`** | เลื่อนหน้ากระดาษทีละหนึ่งหน้าจอ |
+| **`Home / End`** | เลื่อนไปต้นบรรทัด / ท้ายบรรทัด |
+
+### 10.6 การเรียกใช้งานและ Fallback (Invocation Modes)
+```sh
+# 1. เปิดไฟล์ในโหมด In-Terminal Split Micro-IDE
+zedit script.sh
+
+# 2. บังคับโหมด In-Terminal Split (แม้จะอยู่บน Desktop GUI)
+zedit -t script.sh
+
+# 3. บังคับเปิดหน้าต่างเดสก์ท็อปแบบ Native GUI Companion (zedit-ui)
+zedit -g script.sh
+
+# 4. เรียก zedit โดยไม่ระบุไฟล์ขณะมีเซสชันเดิมค้างอยู่ เพื่อสลับโฟกัส
+zedit
+```
+
+---
+
+## 🔢 11. ตัวแปรและโครงสร้างข้อมูล (Variables & Data Structures)
 
 ### 1) อาร์เรย์แบบดัชนีตัวเลข (Indexed Arrays)
+รองรับมาตรฐาน POSIX และ Bash 3.2 ดัชนีเริ่มต้นที่ 0:
 ```sh
 servers=(web-01 app-02 db-03)
 echo "${servers[0]}"      # ผลลัพธ์: web-01
@@ -243,13 +314,8 @@ echo "${servers[@]}"      # พิมพ์สมาชิกทั้งหม�
 echo "${#servers[@]}"     # จำนวนสมาชิก (3)
 ```
 
-### 2) อาร์เรย์แบบตารางจับคู่ค่า (Associative Arrays / Hash Maps)
-```sh
-declare -A config
-config[host]="127.0.0.1"
-config[port]="8080"
-echo "Connecting to ${config[host]}:${config[port]}..."
-```
+### 2) อาร์เรย์แบบตารางจับคู่ค่า (Associative Arrays: แผนงาน Modern Bash 5.x)
+ในมาตรฐาน Bash 3.2 ดั้งเดิมบน macOS ไม่มี Associative Arrays (`declare -A`) ฟีเจอร์นี้ถูกวางสถาปัตยกรรมให้อิมพลีเมนต์ผ่าน Robin-Hood Hash Map ใน **`zbash-pro`** (Enterprise Edition) เพื่อรักษาขนาดไบนารีระดับไมโครและความเข้ากันได้แบบ Bit-Exact ของรุ่นมาตรฐาน
 
 ### 3) ตัวแปรพิเศษของระบบ (Special Parameters)
 * **`$?`**: รหัสผลลัพธ์ของคำสั่งล่าสุด (0 = สำเร็จ)
@@ -261,7 +327,7 @@ echo "Connecting to ${config[host]}:${config[port]}..."
 
 ---
 
-## 📖 11. คู่มือคำสั่งภายในระบบ (Builtin Commands Reference)
+## 📖 12. คู่มือคำสั่งภายในระบบ (Builtin Commands Reference)
 
 | คำสั่ง (Builtin) | ไวยากรณ์ (Syntax) | รายละเอียดการทำงาน |
 |:---|:---|:---|
@@ -270,7 +336,7 @@ echo "Connecting to ${config[host]}:${config[port]}..."
 | **`caller`** | `caller [expr]` | แสดงบริบทของ Call Stack ในฟังก์ชัน |
 | **`cd`** | `cd [-L\|-P] [dir]` | เปลี่ยนไดเรกทอรีทำงาน |
 | **`command`** | `command [-p] [-v\|-V] cmd` | รันคำสั่งโดยข้ามการค้นหาฟังก์ชัน |
-| **`declare`** | `declare [-a\|-A\|-i\|-r\|-x] [name=val]` | ประกาศตัวแปรและกำหนดคุณลักษณะ |
+| **`declare`** | `declare [-a\|-i\|-r\|-x\|-p] [name=val]` | ประกาศตัวแปรและกำหนดคุณลักษณะ |
 | **`dirs`** | `dirs [-c\|-l\|-p\|-v]` | แสดงรายการ Directory Stack |
 | **`disown`** | `disown [-h\|-a\|-r] [job...]` | ถอดงานออกจากระบบการจัดการของเชลล์ |
 | **`echo`** | `echo [-n\|-e\|-E] [str...]` | พิมพ์ข้อความออกทาง Standard Output |
@@ -291,7 +357,7 @@ echo "Connecting to ${config[host]}:${config[port]}..."
 | **`pushd`** | `pushd [dir\|+N\|-N] [-n]` | ใส่ไดเรกทอรีลงใน Stack |
 | **`pwd`** | `pwd [-L\|-P]` | แสดงพาธเต็มของไดเรกทอรีปัจจุบัน |
 | **`read`** | `read [-r] [-p prompt] [-t sec] [var]` | อ่านข้อมูลจาก Standard Input |
-| **`readonly`** | `readonly [-p] [-a\|-A] [name=val]` | ล็อกตัวแปรหรืออาร์เรย์ไม่ให้แก้ไข |
+| **`readonly`** | `readonly [-p] [-a] [name=val]` | ล็อกตัวแปรหรืออาร์เรย์ไม่ให้แก้ไข |
 | **`return`** | `return [n]` | ส่งค่ากลับจากฟังก์ชันเชลล์ |
 | **`set`** | `set [-e\|-u\|-x\|-o opt] [--]` | ปรับแต่งพฤติกรรมและการตั้งค่าของเชลล์ |
 | **`shift`** | `shift [n]` | เลื่อนตำแหน่งของ Positional Parameters |
@@ -304,10 +370,11 @@ echo "Connecting to ${config[host]}:${config[port]}..."
 | **`unalias`** | `unalias [-a] [name...]` | ยกเลิกชื่อย่อคำสั่ง |
 | **`unset`** | `unset [-v\|-f] [name...]` | ลบตัวแปรหรือฟังก์ชันออกจากหน่วยความจำ |
 | **`wait`** | `wait [pid\|job...]` | รอให้โปรเซสเบื้องหลังทำงานเสร็จ |
+| **`zedit`** | `zedit [-t\|-g] [file]` | เปิดตัวแก้ไขข้อความ Micro-IDE แบบ Dual-Surface ในตัวเชลล์ |
 
 ---
 
-## 🏛️ 12. ข้อกำหนดมาตรฐานและลิขสิทธิ์ (Standards & Copyright)
+## 🏛️ 13. ข้อกำหนดมาตรฐานและลิขสิทธิ์ (Standards & Copyright)
 
 * **POSIX Conformance:** รองรับมาตรฐาน IEEE Std 1003.1-2017 (POSIX.1-2017) Shell and Utilities อย่างครบถ้วน
 * **Bash 3.2 Compatibility:** รองรับไวยากรณ์และสคริปต์ของ macOS `/bin/bash` แบบ Drop-in 100%

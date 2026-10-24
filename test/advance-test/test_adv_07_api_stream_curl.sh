@@ -1,6 +1,9 @@
 #!/bin/bash
 # ==============================================================================
 # ADVANCE TEST SUITE - MODULE 07: REST API, JSON STREAMING & WEBHOOKS
+# Author: Wirot Chookeaw (chin6700x)
+# Copyright: (c) 2026 Wirot Chookeaw.
+# License: Apache License 2.0
 # ==============================================================================
 # Comprehensive 100-test differential verification for developer and analyst
 # workflows: HTTP header parsing, status codes, query strings, URL encoding/decoding,

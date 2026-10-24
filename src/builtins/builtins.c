@@ -60,7 +60,8 @@ bool zbash_is_builtin(const char *name) {
             strcmp(name, "jobs") == 0 ||
             strcmp(name, "fg") == 0 ||
             strcmp(name, "bg") == 0 ||
-            strcmp(name, "disown") == 0);
+            strcmp(name, "disown") == 0 ||
+            strcmp(name, "zedit") == 0);
 }
 
 bool zbash_is_builtin_enabled(zbash_state_t *state, const char *name) {
@@ -165,6 +166,7 @@ int zbash_exec_builtin(zbash_state_t *state, int argc, char **argv) {
     if (strcmp(cmd, "fg") == 0) return builtin_fg(state, argc, argv);
     if (strcmp(cmd, "bg") == 0) return builtin_bg(state, argc, argv);
     if (strcmp(cmd, "disown") == 0) return builtin_disown(state, argc, argv);
+    if (strcmp(cmd, "zedit") == 0) return builtin_zedit(state, argc, argv);
 
     return 0;
 }
