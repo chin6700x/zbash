@@ -36,9 +36,8 @@ test/**/zbash_out.txt
 test/**/zbash_err.txt
 
 # WebAssembly & Frontend Build Outputs
-wasm/build/
-wasm/**/*.wasm
-wasm/**/*.map
+wasm/*
+
 
 # Operating System Files (macOS & Unix)
 .DS_Store
